@@ -1,11 +1,8 @@
 package com.paul.sprintsync
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
-import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -47,11 +44,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsResultCallback {
     companion object {
-        private const val DEFAULT_SERVICE_ID = "sync.sprint.nearby"
+        private const val DEFAULT_SERVICE_ID = "training.variant.nearby"
         private const val PERMISSIONS_REQUEST_CODE = 7301
         private const val SENSOR_ELAPSED_PROJECTION_MAX_AGE_NANOS = 3_000_000_000L
         private const val TIMER_REFRESH_INTERVAL_MS = 100L
@@ -115,7 +111,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             )
         }
         connectionsManager = TcpConnectionsManager(
-            hostIpProvider = { resolveTcpHostAddress(activeWifiGatewayIp(), BuildConfig.FALLBACK_HOST_IP) },
+            hostIp = BuildConfig.TCP_HOST_IP,
             hostPort = BuildConfig.TCP_HOST_PORT,
             nowNativeClockSyncElapsedNanos = nativeClockSyncElapsedNanos,
         )
@@ -238,10 +234,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                 raceSessionController.stopSingleDeviceMonitoring()
                                 stopAutoDisplayReconnectLoop()
                                 connectionsManager.stopAll()
-                                connectionsManager.configureNativeClockSyncHost(
-                                    enabled = false,
-                                    requireSensorDomainClock = false,
-                                )
                                 clearDisplayRelayReconnectionState()
                                 displayDiscoveryActive = false
                                 displayConnectedHostEndpointId = null
@@ -253,10 +245,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                 raceSessionController.stopDisplayHostMode()
                                 stopAutoDisplayReconnectLoop()
                                 connectionsManager.stopAll()
-                                connectionsManager.configureNativeClockSyncHost(
-                                    enabled = false,
-                                    requireSensorDomainClock = false,
-                                )
                                 clearDisplayRelayReconnectionState()
                                 clearDisplayHostLapState()
                                 controllerTargetDeviceNamesByEndpointId.clear()
@@ -432,10 +420,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         requestPermissionsIfNeeded(PermissionScope.CAMERA_AND_NETWORK) {
             clearDisplayRelayReconnectionState()
             connectionsManager.stopAll()
-            connectionsManager.configureNativeClockSyncHost(
-                enabled = false,
-                requireSensorDomainClock = false,
-            )
             displayDiscoveryActive = false
             displayConnectedHostEndpointId = null
             displayConnectedHostName = null
@@ -461,10 +445,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         requestPermissionsIfNeeded(PermissionScope.NETWORK_ONLY) {
             clearDisplayRelayReconnectionState()
             connectionsManager.stopAll()
-            connectionsManager.configureNativeClockSyncHost(
-                enabled = false,
-                requireSensorDomainClock = false,
-            )
             displayDiscoveryActive = false
             displayConnectedHostEndpointId = null
             displayConnectedHostName = null
@@ -497,10 +477,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             displayConnectedHostName = null
             displayDiscoveredHosts.clear()
             controllerTargetDeviceNamesByEndpointId.clear()
-            connectionsManager.configureNativeClockSyncHost(
-                enabled = false,
-                requireSensorDomainClock = false,
-            )
             try {
                 connectionsManager.startHosting(
                     serviceId = DEFAULT_SERVICE_ID,
@@ -1041,33 +1017,10 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
 
         val monitoringSyncMode = when {
             !isClient || !hasPeers || raceState.stage == SessionStage.SETUP -> "-"
-            raceSessionController.hasFreshGpsLock() -> "GPS"
-            raceSessionController.hasFreshClockLock() -> "NTP"
-            else -> "-"
+            else -> "LOCAL"
         }
-        val monitoringLatencyMs = if (
-            isClient &&
-            hasPeers &&
-            monitoringSyncMode == "NTP" &&
-            clockState.hostClockRoundTripNanos != null
-        ) {
-            (clockState.hostClockRoundTripNanos.toDouble() / 1_000_000.0).roundToInt()
-        } else {
-            null
-        }
-
-        val clockLockWarningText = if (
-            isClient &&
-            !isPassiveDisplayClient &&
-            raceState.monitoringActive &&
-            hasPeers &&
-            localRole != SessionDeviceRole.UNASSIGNED &&
-            !raceSessionController.hasFreshAnyClockLock()
-        ) {
-            "Clock sync lock is invalid. Triggers from this device are being dropped until sync recovers."
-        } else {
-            null
-        }
+        val monitoringLatencyMs: Int? = null
+        val clockLockWarningText: String? = null
 
         val runStatusLabel = when {
             timelineForUi.hostStartSensorNanos == null -> "Ready"
@@ -1107,17 +1060,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             splitSensorNanos = timelineForUi.hostSplitSensorNanos,
         )
 
-        val clockSummary = when {
-            raceSessionController.hasFreshClockLock() && clockState.hostMinusClientElapsedNanos != null -> {
-                "Locked ${clockState.hostMinusClientElapsedNanos}ns"
-            }
-
-            clockState.hostMinusClientElapsedNanos != null -> {
-                "Stale ${clockState.hostMinusClientElapsedNanos}ns"
-            }
-
-            else -> "Unlocked"
-        }
+        val clockSummary = if (hasPeers) "Local authority" else "Standalone"
         val displayEndpointIdsForRows = if (mode == SessionOperatingMode.DISPLAY_HOST) {
             connectionsManager.connectedEndpoints().filterNot { endpointId ->
                 displayControllerEndpointIds.contains(endpointId) ||
@@ -1151,11 +1094,11 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                 canStartMonitoring = mode == SessionOperatingMode.SINGLE_DEVICE && raceSessionController.canStartMonitoring(),
                 isHost = isHost,
                 localRole = localRole,
-                monitoringConnectionTypeLabel = if (hasPeers) {
-                    "TCP (${resolveTcpHostAddress(activeWifiGatewayIp(), BuildConfig.FALLBACK_HOST_IP)}:${BuildConfig.TCP_HOST_PORT})"
-                } else {
-                    "-"
-                },
+                monitoringConnectionTypeLabel = resolveMonitoringConnectionTypeLabel(
+                    hasPeers = hasPeers,
+                    hostIp = BuildConfig.TCP_HOST_IP,
+                    hostPort = BuildConfig.TCP_HOST_PORT,
+                ),
                 monitoringSyncModeLabel = monitoringSyncMode,
                 monitoringLatencyMs = monitoringLatencyMs,
                 hasConnectedPeers = hasPeers,
@@ -1252,24 +1195,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             return "android-$androidId"
         }
         return "local-${Build.DEVICE.orEmpty()}"
-    }
-
-    private fun activeWifiGatewayIp(): String? {
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
-        val activeNetwork = connectivityManager.activeNetwork ?: return null
-        val linkProperties = connectivityManager.getLinkProperties(activeNetwork) ?: return null
-        val routeGateway = linkProperties.routes
-            .firstOrNull { it.isDefaultRoute }
-            ?.gateway
-            ?.hostAddress
-        if (!routeGateway.isNullOrBlank()) {
-            return routeGateway
-        }
-
-        // Some OEM stacks (observed on OnePlus) omit default routes while still exposing DHCP gateway.
-        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return null
-        val dhcpGateway = wifiManager.dhcpInfo?.gateway ?: 0
-        return ipv4FromLittleEndianInt(dhcpGateway)
     }
 
     private fun shouldRunLocalMonitoring(): Boolean {
@@ -1510,9 +1435,11 @@ internal fun resolveEffectiveAutoStartRole(configuredRole: String, flavorName: S
 internal fun isOneplusControllerFlavor(flavorName: String): Boolean =
     flavorName.trim().equals("oneplusSingle", ignoreCase = true)
 
-internal fun resolveTcpHostAddress(gatewayIp: String?, fallbackIp: String = "192.168.43.1"): String {
-    val gateway = gatewayIp?.trim().orEmpty()
-    return gateway.ifBlank { fallbackIp }
+internal fun resolveMonitoringConnectionTypeLabel(hasPeers: Boolean, hostIp: String, hostPort: Int): String {
+    if (!hasPeers) {
+        return "-"
+    }
+    return "TCP (${hostIp.trim()}:${hostPort})"
 }
 
 internal fun reconnectDelayMillis(attempt: Int): Long {

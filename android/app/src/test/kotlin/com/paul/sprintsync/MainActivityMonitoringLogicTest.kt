@@ -463,10 +463,27 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
-    fun `tcp host ip prefers hotspot gateway and falls back when gateway missing`() {
-        assertEquals("10.173.42.224", resolveTcpHostAddress(gatewayIp = "10.173.42.224"))
-        assertEquals("192.168.43.1", resolveTcpHostAddress(gatewayIp = null))
-        assertEquals("192.168.43.1", resolveTcpHostAddress(gatewayIp = ""))
+    fun `monitoring connection label uses configured tcp host and port when peers connected`() {
+        assertEquals(
+            "TCP (192.168.0.103:9000)",
+            resolveMonitoringConnectionTypeLabel(
+                hasPeers = true,
+                hostIp = "192.168.0.103",
+                hostPort = 9000,
+            ),
+        )
+    }
+
+    @Test
+    fun `monitoring connection label hides tcp host when no peers connected`() {
+        assertEquals(
+            "-",
+            resolveMonitoringConnectionTypeLabel(
+                hasPeers = false,
+                hostIp = "192.168.0.103",
+                hostPort = 9000,
+            ),
+        )
     }
 
     @Test

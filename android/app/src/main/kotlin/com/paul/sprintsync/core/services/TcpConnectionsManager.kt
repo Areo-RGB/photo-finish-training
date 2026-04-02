@@ -18,7 +18,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class TcpConnectionsManager(
-    private val hostIpProvider: () -> String,
+    private val hostIp: String,
     private val hostPort: Int,
     private val nowNativeClockSyncElapsedNanos: (requireSensorDomainClock: Boolean) -> Long?,
 ) : SessionConnectionsManager {
@@ -45,12 +45,6 @@ class TcpConnectionsManager(
     @Volatile
     private var serverSocket: ServerSocket? = null
 
-    @Volatile
-    private var nativeClockSyncHostEnabled = false
-
-    @Volatile
-    private var nativeClockSyncRequireSensorDomain = false
-
     override fun setEventListener(listener: ((NearbyEvent) -> Unit)?) {
         eventListener = listener
     }
@@ -60,11 +54,6 @@ class TcpConnectionsManager(
     override fun currentStrategy(): NearbyTransportStrategy = activeStrategy
 
     override fun connectedEndpoints(): Set<String> = connectedSockets.keys.toSet()
-
-    override fun configureNativeClockSyncHost(enabled: Boolean, requireSensorDomainClock: Boolean) {
-        nativeClockSyncHostEnabled = enabled
-        nativeClockSyncRequireSensorDomain = requireSensorDomainClock
-    }
 
     override fun startHosting(
         serviceId: String,
@@ -135,11 +124,10 @@ class TcpConnectionsManager(
         activeRole = NearbyRole.CLIENT
         activeStrategy = strategy
         discoveryRunning.set(true)
-        val targetHost = hostIpProvider()
         emitEvent(
             NearbyEvent.EndpointFound(
-                endpointId = targetHost,
-                endpointName = targetHost,
+                endpointId = hostIp,
+                endpointName = hostIp,
                 serviceId = serviceId,
             ),
         )
@@ -151,7 +139,7 @@ class TcpConnectionsManager(
             onComplete(Result.failure(IllegalStateException("requestConnection ignored: not in client mode.")))
             return
         }
-        val targetHost = endpointId.substringBefore(":").ifBlank { hostIpProvider() }
+        val targetHost = endpointId.substringBefore(":").ifBlank { hostIp }
         ioExecutor.execute {
             try {
                 val socket = Socket(targetHost, hostPort)
@@ -272,15 +260,15 @@ class TcpConnectionsManager(
     }
 
     private fun tryRespondToClockSyncRequest(endpointId: String, payloadBytes: ByteArray): Boolean {
-        if (activeRole != NearbyRole.HOST || !nativeClockSyncHostEnabled) {
+        if (activeRole != NearbyRole.HOST) {
             return true
         }
         if (!connectedSockets.containsKey(endpointId)) {
             return true
         }
         val request = SessionClockSyncBinaryCodec.decodeRequest(payloadBytes) ?: return true
-        val hostReceiveElapsedNanos = nowNativeClockSyncElapsedNanos(nativeClockSyncRequireSensorDomain) ?: return true
-        val hostSendElapsedNanos = nowNativeClockSyncElapsedNanos(nativeClockSyncRequireSensorDomain) ?: return true
+        val hostReceiveElapsedNanos = nowNativeClockSyncElapsedNanos(false) ?: return true
+        val hostSendElapsedNanos = nowNativeClockSyncElapsedNanos(false) ?: return true
         val response = SessionClockSyncBinaryResponse(
             clientSendElapsedNanos = request.clientSendElapsedNanos,
             hostReceiveElapsedNanos = hostReceiveElapsedNanos,

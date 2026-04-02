@@ -31,8 +31,8 @@ function fail(message, detail = '') {
 
 const flavorTargets = [
   {
-    id: 'topazSingle',
-    modelMatchers: ['23021RAA2Y', 'topaz'],
+    id: 'xiaomiPadDisplay',
+    modelMatchers: ['2410CRP4CG', 'Xiaomi_Pad_7', 'Pad_7'],
     apkCandidates: [
       resolve(
         process.cwd(),
@@ -41,16 +41,16 @@ const flavorTargets = [
         'build',
         'outputs',
         'apk',
-        'topazSingle',
+        'xiaomiPadDisplay',
         'debug',
-        'app-topazSingle-debug.apk',
+        'app-xiaomiPadDisplay-debug.apk',
       ),
     ],
-    appId: 'sync.sprint.topaz.single',
+    appId: 'training.variant.xiaomi.display',
   },
   {
-    id: 'emlL29Single',
-    modelMatchers: ['EML_L29', 'EML-L29'],
+    id: 'pixel7Single',
+    modelMatchers: ['Pixel 7', 'pixel_7', 'panther'],
     apkCandidates: [
       resolve(
         process.cwd(),
@@ -59,12 +59,12 @@ const flavorTargets = [
         'build',
         'outputs',
         'apk',
-        'emlL29Single',
+        'pixel7Single',
         'debug',
-        'app-emlL29Single-debug.apk',
+        'app-pixel7Single-debug.apk',
       ),
     ],
-    appId: 'sync.sprint.emll29.single',
+    appId: 'training.variant.pixel7.single',
   },
   {
     id: 'oneplusSingle',
@@ -82,11 +82,11 @@ const flavorTargets = [
         'app-oneplusSingle-debug.apk',
       ),
     ],
-    appId: 'sync.sprint.oneplus.single',
+    appId: 'training.variant.oneplus.single',
   },
   {
-    id: 'xiaomiPadDisplay',
-    modelMatchers: ['2410CRP4CG', 'Xiaomi_Pad_7', 'Pad_7'],
+    id: 'topazSingle',
+    modelMatchers: ['23021RAA2Y', 'topaz'],
     apkCandidates: [
       resolve(
         process.cwd(),
@@ -95,12 +95,30 @@ const flavorTargets = [
         'build',
         'outputs',
         'apk',
-        'xiaomiPadDisplay',
+        'topazSingle',
         'debug',
-        'app-xiaomiPadDisplay-debug.apk',
+        'app-topazSingle-debug.apk',
       ),
     ],
-    appId: 'sync.sprint.xiaomi.display',
+    appId: 'training.variant.topaz.single',
+  },
+  {
+    id: 'emlL29Single',
+    modelMatchers: ['EML_L29', 'EML-L29'],
+    apkCandidates: [
+      resolve(
+        process.cwd(),
+        'android',
+        'app',
+        'build',
+        'outputs',
+        'apk',
+        'emlL29Single',
+        'debug',
+        'app-emlL29Single-debug.apk',
+      ),
+    ],
+    appId: 'training.variant.emll29.single',
   },
 ];
 

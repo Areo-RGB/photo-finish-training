@@ -9,8 +9,6 @@ interface SessionConnectionsManager {
 
     fun connectedEndpoints(): Set<String>
 
-    fun configureNativeClockSyncHost(enabled: Boolean, requireSensorDomainClock: Boolean)
-
     fun startHosting(
         serviceId: String,
         endpointName: String,

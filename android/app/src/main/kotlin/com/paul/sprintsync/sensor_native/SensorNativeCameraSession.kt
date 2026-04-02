@@ -210,6 +210,7 @@ internal class SensorNativeCameraSession(
 internal object SensorNativeCameraPolicy {
     const val AE_AWB_WARMUP_MS = 400L
     private const val NORMAL_TARGET_FPS_UPPER = 60
+    private const val PREFERRED_HS_FIXED_FPS = 120
 
     data class CameraFacingSelection(
         val selected: NativeCameraFacing,
@@ -258,6 +259,23 @@ internal object SensorNativeCameraPolicy {
             return null
         }
         return bounds.maxWithOrNull(compareBy<Pair<Int, Int>>({ it.second }, { it.first }))
+    }
+
+    fun selectPreferredHsBounds(bounds: Iterable<Pair<Int, Int>>?): Pair<Int, Int>? {
+        if (bounds == null) {
+            return null
+        }
+        val boundList = bounds.toList()
+        if (boundList.isEmpty()) {
+            return null
+        }
+        val fixedRanges = boundList.filter { it.first == it.second }
+        val preferredFixed = fixedRanges.firstOrNull { it.first == PREFERRED_HS_FIXED_FPS }
+        if (preferredFixed != null) {
+            return preferredFixed
+        }
+        return fixedRanges.maxWithOrNull(compareBy<Pair<Int, Int>>({ it.second }, { it.first }))
+            ?: selectHighestFrameRateBounds(boundList)
     }
 
     fun selectCameraFacing(

@@ -227,7 +227,7 @@ class RaceSessionControllerTest {
     }
 
     @Test
-    fun `timeline snapshot maps host sensor into local sensor in client mode`() {
+    fun `timeline snapshot keeps host sensor timeline in client mode`() {
         val controller = RaceSessionController(
             loadLastRun = { null },
             saveLastRun = { },
@@ -237,12 +237,6 @@ class RaceSessionControllerTest {
         )
 
         controller.setNetworkRole(SessionNetworkRole.CLIENT)
-        controller.updateClockState(
-            hostMinusClientElapsedNanos = 100L,
-            hostSensorMinusElapsedNanos = 500L,
-            localSensorMinusElapsedNanos = 200L,
-        )
-
         val snapshot = SessionTimelineSnapshotMessage(
             hostStartSensorNanos = 1_000L,
             hostStopSensorNanos = 2_000L,
@@ -256,12 +250,12 @@ class RaceSessionControllerTest {
             ),
         )
 
-        assertEquals(600L, controller.uiState.value.timeline.hostStartSensorNanos)
-        assertEquals(1_600L, controller.uiState.value.timeline.hostStopSensorNanos)
+        assertEquals(1_000L, controller.uiState.value.timeline.hostStartSensorNanos)
+        assertEquals(2_000L, controller.uiState.value.timeline.hostStopSensorNanos)
     }
 
     @Test
-    fun `snapshot ignores host timeline when client is unsynced`() {
+    fun `snapshot keeps host timeline when client is unsynced`() {
         val controller = RaceSessionController(
             loadLastRun = { null },
             saveLastRun = { },
@@ -271,11 +265,6 @@ class RaceSessionControllerTest {
         )
 
         controller.setNetworkRole(SessionNetworkRole.CLIENT)
-        controller.updateClockState(
-            hostMinusClientElapsedNanos = 100L,
-            hostSensorMinusElapsedNanos = 500L,
-            localSensorMinusElapsedNanos = 200L,
-        )
         controller.onNearbyEvent(
             NearbyEvent.PayloadReceived(
                 endpointId = "ep-1",
@@ -286,7 +275,7 @@ class RaceSessionControllerTest {
                 ).toJsonString(),
             ),
         )
-        assertEquals(600L, controller.uiState.value.timeline.hostStartSensorNanos)
+        assertEquals(1_000L, controller.uiState.value.timeline.hostStartSensorNanos)
         assertNull(controller.uiState.value.timeline.hostStopSensorNanos)
 
         controller.updateClockState(
@@ -321,9 +310,9 @@ class RaceSessionControllerTest {
             ),
         )
 
-        assertEquals(600L, controller.uiState.value.timeline.hostStartSensorNanos)
-        assertNull(controller.uiState.value.timeline.hostStopSensorNanos)
-        assertEquals("snapshot_applied_unsynced_timeline_ignored", controller.uiState.value.lastEvent)
+        assertEquals(5_000L, controller.uiState.value.timeline.hostStartSensorNanos)
+        assertEquals(7_000L, controller.uiState.value.timeline.hostStopSensorNanos)
+        assertEquals("snapshot_applied", controller.uiState.value.lastEvent)
     }
 
     @Test
@@ -465,7 +454,7 @@ class RaceSessionControllerTest {
     }
 
     @Test
-    fun `auto ticker starts NTP burst when GPS lock is unavailable and clock lock is stale`() {
+    fun `auto ticker does not start NTP burst when local authority mode is active`() {
         val sentClockSyncRequests = AtomicInteger(0)
         val firstRequestSent = CountDownLatch(1)
         val controller = RaceSessionController(
@@ -494,8 +483,8 @@ class RaceSessionControllerTest {
             ),
         )
 
-        assertTrue(firstRequestSent.await(3, TimeUnit.SECONDS))
-        assertTrue(sentClockSyncRequests.get() >= 1)
+        assertFalse(firstRequestSent.await(3, TimeUnit.SECONDS))
+        assertEquals(0, sentClockSyncRequests.get())
     }
 
     @Test
@@ -585,7 +574,7 @@ class RaceSessionControllerTest {
     }
 
     @Test
-    fun `timeline snapshot maps split timestamps in client mode`() {
+    fun `timeline snapshot keeps split timestamps in client mode`() {
         val controller = RaceSessionController(
             loadLastRun = { null },
             saveLastRun = { },
@@ -595,12 +584,6 @@ class RaceSessionControllerTest {
         )
 
         controller.setNetworkRole(SessionNetworkRole.CLIENT)
-        controller.updateClockState(
-            hostMinusClientElapsedNanos = 100L,
-            hostSensorMinusElapsedNanos = 500L,
-            localSensorMinusElapsedNanos = 200L,
-        )
-
         val snapshot = SessionTimelineSnapshotMessage(
             hostStartSensorNanos = 1_000L,
             hostStopSensorNanos = 2_000L,
@@ -615,7 +598,7 @@ class RaceSessionControllerTest {
             ),
         )
 
-        assertEquals(listOf(900L, 1_200L), controller.uiState.value.timeline.hostSplitSensorNanos)
+        assertEquals(listOf(1_300L, 1_600L), controller.uiState.value.timeline.hostSplitSensorNanos)
     }
 
     @Test
@@ -725,11 +708,10 @@ class RaceSessionControllerTest {
         assertTrue(controller.startMonitoring())
         controller.assignRole("local-device", SessionDeviceRole.DISPLAY)
 
+        val timelineBeforeTrigger = controller.uiState.value.timeline
         controller.onLocalMotionTrigger("motion", splitIndex = 0, triggerSensorNanos = 1_000L)
 
-        assertNull(controller.uiState.value.timeline.hostStartSensorNanos)
-        assertNull(controller.uiState.value.timeline.hostStopSensorNanos)
-        assertTrue(controller.uiState.value.timeline.hostSplitSensorNanos.isEmpty())
+        assertEquals(timelineBeforeTrigger, controller.uiState.value.timeline)
     }
 
     @Test

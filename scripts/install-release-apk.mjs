@@ -21,7 +21,7 @@ function fail(message, detail = '') {
   process.exit(1);
 }
 
-const appId = 'sync.sprint';
+const appId = 'training.variant';
 const apkCandidates = [
   resolve(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk'),
   // Legacy fallback for older custom Gradle layout.

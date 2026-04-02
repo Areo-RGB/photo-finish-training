@@ -163,25 +163,6 @@ class RaceSessionController(
             )
             _uiState.value = _uiState.value.copy(timeline = persistedTimeline)
         }
-
-        viewModelScope.launch(ioDispatcher) {
-            while (true) {
-                kotlinx.coroutines.delay(2000)
-                val state = _uiState.value
-                if (state.networkRole == SessionNetworkRole.CLIENT &&
-                    (state.stage == SessionStage.LOBBY || state.stage == SessionStage.MONITORING)
-                ) {
-                    val endpointId = state.connectedEndpoints.firstOrNull()
-                    if (endpointId != null &&
-                        !state.clockSyncInProgress &&
-                        !hasFreshGpsLock() &&
-                        !hasFreshClockLock(CLOCK_LOCK_VALIDITY_NANOS / 2)
-                    ) {
-                        startClockSyncBurst(endpointId)
-                    }
-                }
-            }
-        }
     }
 
     fun setLocalDeviceIdentity(deviceId: String, deviceName: String) {
@@ -524,7 +505,10 @@ class RaceSessionController(
             return
         }
 
-        if (_uiState.value.operatingMode == SessionOperatingMode.SINGLE_DEVICE) {
+        if (
+            _uiState.value.operatingMode == SessionOperatingMode.SINGLE_DEVICE &&
+            _uiState.value.networkRole == SessionNetworkRole.NONE
+        ) {
             handleSingleDeviceTrigger(triggerSensorNanos)
             return
         }
@@ -556,7 +540,7 @@ class RaceSessionController(
             val request = SessionTriggerRequestMessage(
                 role = role,
                 triggerSensorNanos = triggerSensorNanos,
-                mappedHostSensorNanos = mapClientSensorToHostSensor(triggerSensorNanos),
+                mappedHostSensorNanos = null,
             ).toJsonString()
             sendToHost(request)
         }
@@ -826,20 +810,10 @@ class RaceSessionController(
         }
 
         SessionTriggerMessage.tryParse(rawMessage)?.let { trigger ->
-            val triggerSensorNanos = if (_uiState.value.networkRole == SessionNetworkRole.CLIENT) {
-                val mapped = mapHostSensorToLocalSensor(trigger.triggerSensorNanos)
-                if (mapped == null) {
-                    _uiState.value = _uiState.value.copy(lastEvent = "trigger_dropped_unsynced")
-                    return
-                }
-                mapped
-            } else {
-                trigger.triggerSensorNanos
-            }
             ingestLocalTrigger(
                 triggerType = trigger.triggerType,
                 splitIndex = 0,
-                triggerSensorNanos = triggerSensorNanos,
+                triggerSensorNanos = trigger.triggerSensorNanos,
                 broadcast = false,
             )
             return
@@ -938,7 +912,7 @@ class RaceSessionController(
         if (mappedType == null) {
             return
         }
-        val hostSensorNanos = request.mappedHostSensorNanos ?: request.triggerSensorNanos
+        val hostSensorNanos = request.mappedHostSensorNanos ?: estimateLocalSensorNanosNow()
         ingestLocalTrigger(
             triggerType = mappedType,
             splitIndex = 0,
@@ -970,45 +944,11 @@ class RaceSessionController(
 
         val localRoleFromSnapshot =
             mappedDevices.firstOrNull { it.id == resolvedSelfId }?.role ?: SessionDeviceRole.UNASSIGNED
-        val shouldUseHostTimelineDirectly = localRoleFromSnapshot == SessionDeviceRole.DISPLAY
-        val mappedStart = if (shouldUseHostTimelineDirectly) {
-            snapshot.hostStartSensorNanos
-        } else {
-            snapshot.hostStartSensorNanos?.let { mapHostSensorToLocalSensor(it) }
-        }
-        val mappedStop = if (shouldUseHostTimelineDirectly) {
-            snapshot.hostStopSensorNanos
-        } else {
-            snapshot.hostStopSensorNanos?.let { mapHostSensorToLocalSensor(it) }
-        }
-        val mappedSplits = if (shouldUseHostTimelineDirectly) {
-            snapshot.hostSplitSensorNanos
-        } else {
-            snapshot.hostSplitSensorNanos.mapNotNull { hostSplit ->
-                mapHostSensorToLocalSensor(hostSplit)
-            }
-        }
-        val mappingAvailable = if (shouldUseHostTimelineDirectly) {
-            true
-        } else {
-            (snapshot.hostStartSensorNanos == null || mappedStart != null) &&
-                (snapshot.hostStopSensorNanos == null || mappedStop != null) &&
-                (snapshot.hostSplitSensorNanos.size == mappedSplits.size)
-        }
-        val timeline = if (mappingAvailable) {
-            SessionRaceTimeline(
-                hostStartSensorNanos = mappedStart,
-                hostStopSensorNanos = mappedStop,
-                hostSplitSensorNanos = mappedSplits,
-            )
-        } else {
-            _uiState.value.timeline
-        }
-        val snapshotEvent = if (mappingAvailable) {
-            "snapshot_applied"
-        } else {
-            "snapshot_applied_unsynced_timeline_ignored"
-        }
+        val timeline = SessionRaceTimeline(
+            hostStartSensorNanos = snapshot.hostStartSensorNanos,
+            hostStopSensorNanos = snapshot.hostStopSensorNanos,
+            hostSplitSensorNanos = snapshot.hostSplitSensorNanos,
+        )
 
         _uiState.value = _uiState.value.copy(
             stage = snapshot.stage,
@@ -1026,7 +966,7 @@ class RaceSessionController(
             ),
             deviceRole = localRoleFromSnapshot,
             timeline = timeline,
-            lastEvent = snapshotEvent,
+            lastEvent = "snapshot_applied",
             lastError = null,
         )
 
@@ -1083,50 +1023,11 @@ class RaceSessionController(
     }
 
     private fun ingestTimelineSnapshot(snapshot: SessionTimelineSnapshotMessage) {
-        val localTimeline = if (_uiState.value.networkRole == SessionNetworkRole.CLIENT) {
-            if (localDeviceRole() == SessionDeviceRole.DISPLAY) {
-                SessionRaceTimeline(
-                    hostStartSensorNanos = snapshot.hostStartSensorNanos,
-                    hostStopSensorNanos = snapshot.hostStopSensorNanos,
-                    hostSplitSensorNanos = snapshot.hostSplitSensorNanos,
-                )
-            } else {
-            val localStart = snapshot.hostStartSensorNanos?.let { hostStart ->
-                mapHostSensorToLocalSensor(hostStart)
-            }
-            if (snapshot.hostStartSensorNanos != null && localStart == null) {
-                _uiState.value = _uiState.value.copy(lastEvent = "timeline_snapshot_dropped_unsynced")
-                return
-            }
-            val localStop = snapshot.hostStopSensorNanos?.let { hostStop ->
-                mapHostSensorToLocalSensor(hostStop)
-            }
-            if (snapshot.hostStopSensorNanos != null && localStop == null) {
-                _uiState.value = _uiState.value.copy(lastEvent = "timeline_snapshot_dropped_unsynced")
-                return
-            }
-            val localSplits = mutableListOf<Long>()
-            for (hostSplit in snapshot.hostSplitSensorNanos) {
-                val mapped = mapHostSensorToLocalSensor(hostSplit)
-                if (mapped == null) {
-                    _uiState.value = _uiState.value.copy(lastEvent = "timeline_snapshot_dropped_unsynced")
-                    return
-                }
-                localSplits += mapped
-            }
-            SessionRaceTimeline(
-                hostStartSensorNanos = localStart,
-                hostStopSensorNanos = localStop,
-                hostSplitSensorNanos = localSplits,
-            )
-            }
-        } else {
-            SessionRaceTimeline(
-                hostStartSensorNanos = snapshot.hostStartSensorNanos,
-                hostStopSensorNanos = snapshot.hostStopSensorNanos,
-                hostSplitSensorNanos = snapshot.hostSplitSensorNanos,
-            )
-        }
+        val localTimeline = SessionRaceTimeline(
+            hostStartSensorNanos = snapshot.hostStartSensorNanos,
+            hostStopSensorNanos = snapshot.hostStopSensorNanos,
+            hostSplitSensorNanos = snapshot.hostSplitSensorNanos,
+        )
         _uiState.value = _uiState.value.copy(timeline = localTimeline, lastEvent = "timeline_snapshot")
         maybePersistCompletedRun(localTimeline)
     }
@@ -1381,55 +1282,49 @@ class RaceSessionController(
     }
 
     private fun applyJoinOrderAutoRoleDefaults(devices: List<SessionDevice>): List<SessionDevice> {
-        var nextDevices = devices
-        val local = nextDevices.firstOrNull { it.isLocal } ?: return devices
-        val remotes = nextDevices.filterNot { it.isLocal }
+        val local = devices.firstOrNull { it.isLocal } ?: return devices
+        val remotes = devices.filterNot { it.isLocal }
         val participantRemotes = remotes.filterNot { isControllerDevice(it) }
-        if (remotes.isEmpty()) {
+        if (participantRemotes.isEmpty()) {
             return devices
         }
 
-        if (nextDevices.none { it.role == SessionDeviceRole.START }) {
-            val preferredStartId = participantRemotes.firstOrNull { it.role == SessionDeviceRole.UNASSIGNED }?.id
+        val remoteStartAssigned = participantRemotes.any { it.role == SessionDeviceRole.START }
+        val remoteStopAssigned = participantRemotes.any { it.role == SessionDeviceRole.STOP }
+        val orderedRemoteIds = participantRemotes
+            .filter { it.role == SessionDeviceRole.UNASSIGNED }
+            .map { it.id }
+            .toMutableList()
+        val nextRoles = mutableMapOf<String, SessionDeviceRole>()
+
+        if (!remoteStartAssigned) {
+            val preferredStartId = orderedRemoteIds.removeFirstOrNull()
                 ?: if (local.role == SessionDeviceRole.UNASSIGNED) local.id else null
             if (preferredStartId != null) {
-                nextDevices = nextDevices.map { existing ->
-                    if (existing.id == preferredStartId && existing.role == SessionDeviceRole.UNASSIGNED) {
-                        existing.copy(role = SessionDeviceRole.START)
-                    } else {
-                        existing
-                    }
-                }
+                nextRoles[preferredStartId] = SessionDeviceRole.START
             }
         }
 
-        if (nextDevices.none { it.role == SessionDeviceRole.STOP }) {
-            val preferredStopId = nextDevices
-                .filterNot { it.isLocal }
-                .filterNot { isControllerDevice(it) }
-                .firstOrNull { it.role == SessionDeviceRole.UNASSIGNED }
-                ?.id
-                ?: if (nextDevices.any { it.id == local.id && it.role == SessionDeviceRole.UNASSIGNED }) local.id else null
+        if (!remoteStopAssigned) {
+            val preferredStopId = orderedRemoteIds.removeFirstOrNull()
+                ?: if (local.role == SessionDeviceRole.UNASSIGNED && local.id !in nextRoles) local.id else null
             if (preferredStopId != null) {
-                nextDevices = nextDevices.map { existing ->
-                    if (existing.id == preferredStopId && existing.role == SessionDeviceRole.UNASSIGNED) {
-                        existing.copy(role = SessionDeviceRole.STOP)
-                    } else {
-                        existing
-                    }
-                }
+                nextRoles[preferredStopId] = SessionDeviceRole.STOP
             }
         }
 
-        nextDevices = nextDevices.map { existing ->
-            if (!existing.isLocal && !isControllerDevice(existing) && existing.role == SessionDeviceRole.UNASSIGNED) {
-                existing.copy(role = SessionDeviceRole.SPLIT)
+        return devices.map { existing ->
+            val autoRole = when {
+                existing.id in nextRoles -> nextRoles.getValue(existing.id)
+                !existing.isLocal && !isControllerDevice(existing) && existing.role == SessionDeviceRole.UNASSIGNED -> SessionDeviceRole.SPLIT
+                else -> null
+            }
+            if (autoRole != null && existing.role == SessionDeviceRole.UNASSIGNED) {
+                existing.copy(role = autoRole)
             } else {
                 existing
             }
         }
-
-        return nextDevices
     }
 
     private fun roleToTriggerType(role: SessionDeviceRole): String? {
