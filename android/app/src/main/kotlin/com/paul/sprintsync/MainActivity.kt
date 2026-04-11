@@ -23,6 +23,10 @@ import com.paul.sprintsync.core.services.NearbyEvent
 import com.paul.sprintsync.core.services.NearbyTransportStrategy
 import com.paul.sprintsync.core.services.SessionConnectionsManager
 import com.paul.sprintsync.core.services.TcpConnectionsManager
+import com.paul.sprintsync.core.DeviceDetector
+import com.paul.sprintsync.core.RuntimeDeviceConfig
+import com.paul.sprintsync.core.RuntimeNetworkRole
+import com.paul.sprintsync.core.RuntimeOperatingMode
 import com.paul.sprintsync.features.motion_detection.MotionCameraFacing
 import com.paul.sprintsync.features.motion_detection.MotionDetectionController
 import com.paul.sprintsync.features.race_session.RaceSessionController
@@ -84,15 +88,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private var pendingPermissionScope: PermissionScope = PermissionScope.NETWORK_ONLY
     private var autoDisplayReconnectJob: Job? = null
     private var autoDisplayReconnectAttempts: Int = 0
-    private val effectiveAutoStartRole: String = resolveEffectiveAutoStartRole(
-        configuredRole = BuildConfig.AUTO_START_ROLE,
-        flavorName = BuildConfig.FLAVOR,
-    )
-    private val setupActionProfile: SetupActionProfile = if (isOneplusControllerFlavor(BuildConfig.FLAVOR)) {
-        SetupActionProfile.CONTROLLER_ONLY
-    } else {
-        resolveSetupActionProfile(effectiveAutoStartRole)
-    }
+    private val runtimeDeviceConfig: RuntimeDeviceConfig = DeviceDetector.detectCurrentDevice()
+    private val setupActionProfile: SetupActionProfile = resolveSetupActionProfile(runtimeDeviceConfig)
 
     private enum class PermissionScope {
         NETWORK_ONLY,
@@ -149,6 +146,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     uiState = uiState.value,
                     previewViewFactory = previewViewFactory,
                     setupActionProfile = setupActionProfile,
+                    runtimeDeviceConfig = runtimeDeviceConfig,
                     onRequestPermissions = {
                         if (uiState.value.setupBusy) return@SprintSyncApp
                         setSetupBusy(true)
@@ -313,7 +311,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                 )
             }
         }
-        maybeAutoStartFlavorMode()
+        maybeAutoStartRuntimeMode()
     }
 
     override fun onPause() {
@@ -390,22 +388,21 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         updateUiState { copy(setupBusy = busy) }
     }
 
-    private fun maybeAutoStartFlavorMode() {
-        when (resolveAutoStartRole(effectiveAutoStartRole)) {
-            AutoStartRole.NONE -> Unit
-            AutoStartRole.DISPLAY -> {
+    private fun maybeAutoStartRuntimeMode() {
+        when (resolveRuntimeStartupAction(runtimeDeviceConfig)) {
+            RuntimeStartupAction.START_DISPLAY_HOST -> {
                 lifecycleScope.launch {
                     delay(250)
                     startDisplayHostMode()
                 }
             }
-            AutoStartRole.CONTROLLER -> {
+            RuntimeStartupAction.START_CONTROLLER -> {
                 lifecycleScope.launch {
                     delay(250)
                     startControllerMode(enableAutoDisplayReconnect = true)
                 }
             }
-            AutoStartRole.SINGLE -> {
+            RuntimeStartupAction.START_SINGLE_DEVICE -> {
                 lifecycleScope.launch {
                     delay(250)
                     startSingleDeviceMode(enableAutoDisplayReconnect = true)
@@ -1408,32 +1405,24 @@ internal enum class LocalCaptureAction {
     NONE,
 }
 
-internal enum class AutoStartRole {
-    NONE,
-    DISPLAY,
-    CONTROLLER,
-    SINGLE,
+internal enum class RuntimeStartupAction {
+    START_DISPLAY_HOST,
+    START_CONTROLLER,
+    START_SINGLE_DEVICE,
 }
 
-internal fun resolveAutoStartRole(configuredRole: String): AutoStartRole {
-    return when (configuredRole.trim().lowercase()) {
-        "display", "host" -> AutoStartRole.DISPLAY
-        "controller" -> AutoStartRole.CONTROLLER
-        "single", "client" -> AutoStartRole.SINGLE
-        else -> AutoStartRole.NONE
+internal fun resolveRuntimeStartupAction(runtimeDeviceConfig: RuntimeDeviceConfig): RuntimeStartupAction {
+    return when (runtimeDeviceConfig.operatingMode) {
+        RuntimeOperatingMode.SINGLE_DEVICE -> RuntimeStartupAction.START_SINGLE_DEVICE
+        RuntimeOperatingMode.NETWORK_RACE -> {
+            when (runtimeDeviceConfig.networkRole) {
+                RuntimeNetworkRole.HOST -> RuntimeStartupAction.START_DISPLAY_HOST
+                RuntimeNetworkRole.CLIENT -> RuntimeStartupAction.START_CONTROLLER
+                RuntimeNetworkRole.NONE -> RuntimeStartupAction.START_SINGLE_DEVICE
+            }
+        }
     }
 }
-
-internal fun resolveEffectiveAutoStartRole(configuredRole: String, flavorName: String): String {
-    if (isOneplusControllerFlavor(flavorName)) {
-        return "controller"
-    }
-    val normalizedRole = configuredRole.trim().lowercase()
-    return if (normalizedRole.isNotBlank()) normalizedRole else "none"
-}
-
-internal fun isOneplusControllerFlavor(flavorName: String): Boolean =
-    flavorName.trim().equals("oneplusSingle", ignoreCase = true)
 
 internal fun resolveMonitoringConnectionTypeLabel(hasPeers: Boolean, hostIp: String, hostPort: Int): String {
     if (!hasPeers) {

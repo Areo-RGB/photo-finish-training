@@ -383,12 +383,19 @@ class MainActivityMonitoringLogicTest {
         )
     }
 
-    @Test
-    fun `auto start role maps single and display flavors`() {
-        assertEquals(AutoStartRole.SINGLE, resolveAutoStartRole(configuredRole = "single"))
-        assertEquals(AutoStartRole.DISPLAY, resolveAutoStartRole(configuredRole = "display"))
-        assertEquals(AutoStartRole.CONTROLLER, resolveAutoStartRole(configuredRole = "controller"))
-        assertEquals(AutoStartRole.NONE, resolveAutoStartRole(configuredRole = "unknown"))
+@Test
+    fun `runtime startup action uses single-device action for single-device config`() {
+        assertEquals(
+            RuntimeStartupAction.START_SINGLE_DEVICE,
+            resolveRuntimeStartupAction(
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.NONE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
+                    profile = "default",
+                    isControllerOnlyHost = false,
+                ),
+            ),
+        )
     }
 
     @Test
@@ -396,32 +403,49 @@ class MainActivityMonitoringLogicTest {
         assertEquals(SessionStage.MONITORING, controllerInitialStage())
     }
 
-    @Test
-    fun `effective auto-start role falls back to oneplus flavor controller`() {
+@Test
+    fun `runtime startup action uses display-host for network-race host`() {
         assertEquals(
-            "controller",
-            resolveEffectiveAutoStartRole(
-                configuredRole = "none",
-                flavorName = "oneplusSingle",
+            RuntimeStartupAction.START_DISPLAY_HOST,
+            resolveRuntimeStartupAction(
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.HOST,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    profile = "host_xiaomi",
+                    isControllerOnlyHost = true,
+                ),
+            ),
+        )
+    }
+
+@Test
+    fun `runtime startup action uses controller for network-race client`() {
+        assertEquals(
+            RuntimeStartupAction.START_CONTROLLER,
+            resolveRuntimeStartupAction(
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    profile = "default",
+                    isControllerOnlyHost = false,
+                ),
             ),
         )
     }
 
     @Test
-    fun `effective auto-start role forces controller for oneplus flavor`() {
+    fun `runtime startup action falls back to single-device when role is none`() {
         assertEquals(
-            "controller",
-            resolveEffectiveAutoStartRole(
-                configuredRole = "single",
-                flavorName = "oneplusSingle",
+            RuntimeStartupAction.START_SINGLE_DEVICE,
+            resolveRuntimeStartupAction(
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.NONE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    profile = "default",
+                    isControllerOnlyHost = false,
+                ),
             ),
         )
-    }
-
-    @Test
-    fun `oneplus flavor helper matches oneplus single only`() {
-        assertTrue(isOneplusControllerFlavor("oneplusSingle"))
-        assertFalse(isOneplusControllerFlavor("pixel7Single"))
     }
 
     @Test

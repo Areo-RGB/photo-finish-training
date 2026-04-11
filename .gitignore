@@ -44,3 +44,4 @@ app.*.map.json
 .serena/
 .seren/
 .serena/memories/
+.agent-work

@@ -35,28 +35,38 @@ class SprintSyncAppLayoutLogicTest {
         )
     }
 
-    @Test
-    fun `flavor setup profile resolves from startup role`() {
+@Test
+    fun `setup profile resolves from runtime device config`() {
         assertTrue(
             resolveSetupActionProfile(
-                autoStartRole = "single",
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.NONE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
+                    profile = "default",
+                    isControllerOnlyHost = false,
+                ),
             ) == SetupActionProfile.SINGLE_ONLY,
         )
         assertTrue(
             resolveSetupActionProfile(
-                autoStartRole = "display",
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.HOST,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    profile = "host_xiaomi",
+                    isControllerOnlyHost = true,
+                ),
             ) == SetupActionProfile.DISPLAY_ONLY,
         )
         assertEquals(
             SetupActionProfile.CONTROLLER_ONLY,
             resolveSetupActionProfile(
-                autoStartRole = "controller",
+                com.paul.sprintsync.core.RuntimeDeviceConfig(
+                    networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    profile = "default",
+                    isControllerOnlyHost = false,
+                ),
             ),
-        )
-        assertTrue(
-            resolveSetupActionProfile(
-                autoStartRole = "none",
-            ) == SetupActionProfile.SINGLE_ONLY,
         )
     }
 

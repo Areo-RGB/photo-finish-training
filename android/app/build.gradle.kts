@@ -29,9 +29,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "TCP_ONLY", "false")
         buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-        buildConfigField("String", "AUTO_START_ROLE", "\"none\"")
         buildConfigField("int", "TCP_HOST_PORT", "9000")
-        buildConfigField("String", "DEVICE_PROFILE", "\"default\"")
         buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
         resValue("string", "app_name", "training.variant")
     }
@@ -44,9 +42,7 @@ android {
             versionNameSuffix = "-xiaomi-display"
             buildConfigField("boolean", "TCP_ONLY", "true")
             buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("String", "AUTO_START_ROLE", "\"display\"")
             buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("String", "DEVICE_PROFILE", "\"xiaomi_pad_display\"")
             buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "true")
             resValue("string", "app_name", "training.variant display")
         }
@@ -56,9 +52,7 @@ android {
             versionNameSuffix = "-pixel7-single"
             buildConfigField("boolean", "TCP_ONLY", "true")
             buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("String", "AUTO_START_ROLE", "\"single\"")
             buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("String", "DEVICE_PROFILE", "\"pixel7_single\"")
             buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
             resValue("string", "app_name", "training.variant pixel 7")
         }
@@ -68,9 +62,7 @@ android {
             versionNameSuffix = "-oneplus-single"
             buildConfigField("boolean", "TCP_ONLY", "true")
             buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("String", "AUTO_START_ROLE", "\"controller\"")
             buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("String", "DEVICE_PROFILE", "\"oneplus_single\"")
             buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
             resValue("string", "app_name", "training.variant oneplus")
         }
@@ -80,9 +72,7 @@ android {
             versionNameSuffix = "-topaz-single"
             buildConfigField("boolean", "TCP_ONLY", "true")
             buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("String", "AUTO_START_ROLE", "\"single\"")
             buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("String", "DEVICE_PROFILE", "\"topaz_single\"")
             buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
             resValue("string", "app_name", "training.variant topaz")
         }
@@ -92,9 +82,7 @@ android {
             versionNameSuffix = "-emll29-single"
             buildConfigField("boolean", "TCP_ONLY", "true")
             buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("String", "AUTO_START_ROLE", "\"single\"")
             buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("String", "DEVICE_PROFILE", "\"eml_l29_single\"")
             buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
             resValue("string", "app_name", "training.variant eml-l29")
         }

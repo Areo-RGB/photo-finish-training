@@ -138,6 +138,8 @@ fun SprintSyncApp(
     uiState: SprintSyncUiState,
     previewViewFactory: SensorNativePreviewViewFactory,
     setupActionProfile: SetupActionProfile = SetupActionProfile.SINGLE_ONLY,
+    runtimeDeviceConfig: com.paul.sprintsync.core.RuntimeDeviceConfig =
+        com.paul.sprintsync.core.RuntimeDeviceConfig(),
     onRequestPermissions: () -> Unit,
     onStartSingleDevice: () -> Unit,
     onStartDisplayHost: () -> Unit,
@@ -162,6 +164,7 @@ fun SprintSyncApp(
     var showDebugInfo by rememberSaveable { mutableStateOf(false) }
     val effectiveShowPreview = showPreview
     val localDevice = uiState.devices.firstOrNull { it.isLocal }
+    val isHostXiaomiProfile = runtimeDeviceConfig.profile.equals("host_xiaomi", ignoreCase = true)
     val isDisplayHostMode =
         uiState.stage == SessionStage.MONITORING &&
             uiState.operatingMode == SessionOperatingMode.DISPLAY_HOST
@@ -184,7 +187,7 @@ fun SprintSyncApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
-                        horizontal = if (isDisplayHostMode) 6.dp else 16.dp,
+                        horizontal = if (isDisplayHostMode || isHostXiaomiProfile) 6.dp else 16.dp,
                         vertical = if (isDisplayHostMode) 6.dp else 12.dp,
                     ),
                 verticalArrangement = Arrangement.spacedBy(if (isDisplayHostMode) 4.dp else 12.dp),
@@ -1489,12 +1492,18 @@ enum class SetupActionProfile {
     CONTROLLER_ONLY,
 }
 
-internal fun resolveSetupActionProfile(autoStartRole: String): SetupActionProfile {
-    return when (autoStartRole.trim().lowercase()) {
-        "single", "client" -> SetupActionProfile.SINGLE_ONLY
-        "display", "host" -> SetupActionProfile.DISPLAY_ONLY
-        "controller" -> SetupActionProfile.CONTROLLER_ONLY
-        else -> SetupActionProfile.SINGLE_ONLY
+internal fun resolveSetupActionProfile(
+    runtimeDeviceConfig: com.paul.sprintsync.core.RuntimeDeviceConfig,
+): SetupActionProfile {
+    return when (runtimeDeviceConfig.operatingMode) {
+        com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE -> SetupActionProfile.SINGLE_ONLY
+        com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE -> {
+            when (runtimeDeviceConfig.networkRole) {
+                com.paul.sprintsync.core.RuntimeNetworkRole.HOST -> SetupActionProfile.DISPLAY_ONLY
+                com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT -> SetupActionProfile.CONTROLLER_ONLY
+                com.paul.sprintsync.core.RuntimeNetworkRole.NONE -> SetupActionProfile.SINGLE_ONLY
+            }
+        }
     }
 }
 
