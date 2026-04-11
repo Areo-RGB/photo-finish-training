@@ -30,12 +30,10 @@ class TcpConnectionsManagerTest {
         val host = TcpConnectionsManager(
             hostIp = "127.0.0.1",
             hostPort = port,
-            nowNativeClockSyncElapsedNanos = { null },
         )
         val client = TcpConnectionsManager(
             hostIp = "127.0.0.1",
             hostPort = port,
-            nowNativeClockSyncElapsedNanos = { null },
         )
         val payloadLatch = CountDownLatch(1)
         val clientConnected = CountDownLatch(1)

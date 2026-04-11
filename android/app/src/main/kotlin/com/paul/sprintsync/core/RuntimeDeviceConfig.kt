@@ -8,7 +8,6 @@ enum class RuntimeNetworkRole {
 
 enum class RuntimeOperatingMode {
     SINGLE_DEVICE,
-    NETWORK_RACE,
 }
 
 data class RuntimeDeviceConfig(

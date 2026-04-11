@@ -22,7 +22,5 @@ interface SessionConnectionsManager {
 
     fun sendMessage(endpointId: String, messageJson: String, onComplete: (Result<Unit>) -> Unit)
 
-    fun sendClockSyncPayload(endpointId: String, payloadBytes: ByteArray, onComplete: (Result<Unit>) -> Unit)
-
     fun stopAll()
 }

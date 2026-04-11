@@ -2,8 +2,6 @@ package com.paul.sprintsync.core.services
 
 import android.os.Handler
 import android.os.Looper
-import com.paul.sprintsync.features.race_session.SessionClockSyncBinaryCodec
-import com.paul.sprintsync.features.race_session.SessionClockSyncBinaryResponse
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -20,11 +18,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class TcpConnectionsManager(
     private val hostIp: String,
     private val hostPort: Int,
-    private val nowNativeClockSyncElapsedNanos: (requireSensorDomainClock: Boolean) -> Long?,
 ) : SessionConnectionsManager {
     companion object {
         private const val FRAME_KIND_MESSAGE: Byte = 1
-        private const val FRAME_KIND_BINARY: Byte = 2
     }
 
     private val ioExecutor = Executors.newCachedThreadPool()
@@ -182,10 +178,6 @@ class TcpConnectionsManager(
         sendFrame(endpointId, FRAME_KIND_MESSAGE, payload, onComplete)
     }
 
-    override fun sendClockSyncPayload(endpointId: String, payloadBytes: ByteArray, onComplete: (Result<Unit>) -> Unit) {
-        sendFrame(endpointId, FRAME_KIND_BINARY, payloadBytes, onComplete)
-    }
-
     private fun sendFrame(endpointId: String, kind: Byte, payloadBytes: ByteArray, onComplete: (Result<Unit>) -> Unit) {
         val socket = connectedSockets[endpointId]
         if (socket == null) {
@@ -230,11 +222,7 @@ class TcpConnectionsManager(
                                 ),
                             )
                         }
-                        FRAME_KIND_BINARY -> {
-                            if (!tryHandleClockSyncPayload(endpointId, payload)) {
-                                emitError("binary payload dropped: unsupported")
-                            }
-                        }
+                        else -> emitError("frame dropped: unsupported kind=$frameKind")
                     }
                 }
             } catch (_: EOFException) {
@@ -246,52 +234,6 @@ class TcpConnectionsManager(
                 handleDisconnect(endpointId, socket)
             }
         }
-    }
-
-    private fun tryHandleClockSyncPayload(endpointId: String, payloadBytes: ByteArray): Boolean {
-        if (payloadBytes.isEmpty()) return false
-        if (payloadBytes[0] != SessionClockSyncBinaryCodec.VERSION) return false
-        val payloadType = payloadBytes.getOrNull(1)
-        return when (payloadType) {
-            SessionClockSyncBinaryCodec.TYPE_REQUEST -> tryRespondToClockSyncRequest(endpointId, payloadBytes)
-            SessionClockSyncBinaryCodec.TYPE_RESPONSE -> tryEmitClockSyncResponse(endpointId, payloadBytes)
-            else -> true
-        }
-    }
-
-    private fun tryRespondToClockSyncRequest(endpointId: String, payloadBytes: ByteArray): Boolean {
-        if (activeRole != NearbyRole.HOST) {
-            return true
-        }
-        if (!connectedSockets.containsKey(endpointId)) {
-            return true
-        }
-        val request = SessionClockSyncBinaryCodec.decodeRequest(payloadBytes) ?: return true
-        val hostReceiveElapsedNanos = nowNativeClockSyncElapsedNanos(false) ?: return true
-        val hostSendElapsedNanos = nowNativeClockSyncElapsedNanos(false) ?: return true
-        val response = SessionClockSyncBinaryResponse(
-            clientSendElapsedNanos = request.clientSendElapsedNanos,
-            hostReceiveElapsedNanos = hostReceiveElapsedNanos,
-            hostSendElapsedNanos = hostSendElapsedNanos,
-        )
-        val responseBytes = SessionClockSyncBinaryCodec.encodeResponse(response)
-        sendClockSyncPayload(endpointId, responseBytes) { result ->
-            result.exceptionOrNull()?.let { error ->
-                emitError("clock sync response failed: ${error.localizedMessage ?: "unknown"}")
-            }
-        }
-        return true
-    }
-
-    private fun tryEmitClockSyncResponse(endpointId: String, payloadBytes: ByteArray): Boolean {
-        val response = SessionClockSyncBinaryCodec.decodeResponse(payloadBytes) ?: return true
-        emitEvent(
-            NearbyEvent.ClockSyncSampleReceived(
-                endpointId = endpointId,
-                sample = response,
-            ),
-        )
-        return true
     }
 
     override fun stopAll() {

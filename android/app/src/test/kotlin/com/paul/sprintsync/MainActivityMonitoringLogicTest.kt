@@ -363,10 +363,17 @@ class MainActivityMonitoringLogicTest {
                 localRole = SessionDeviceRole.DISPLAY,
             ),
         )
+        assertTrue(
+            shouldRunLocalMonitoring(
+                mode = SessionOperatingMode.SINGLE_DEVICE,
+                userMonitoringEnabled = true,
+                localRole = SessionDeviceRole.UNASSIGNED,
+            ),
+        )
     }
 
     @Test
-    fun `passive display client mode only matches network race client display role`() {
+    fun `passive display client mode only matches single-device client display role`() {
         assertTrue(
             shouldUsePassiveDisplayClientMode(
                 mode = SessionOperatingMode.SINGLE_DEVICE,
@@ -404,13 +411,13 @@ class MainActivityMonitoringLogicTest {
     }
 
 @Test
-    fun `runtime startup action uses display-host for network-race host`() {
+    fun `runtime startup action uses display-host for host role`() {
         assertEquals(
             RuntimeStartupAction.START_DISPLAY_HOST,
             resolveRuntimeStartupAction(
                 com.paul.sprintsync.core.RuntimeDeviceConfig(
                     networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.HOST,
-                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
                     profile = "host_xiaomi",
                     isControllerOnlyHost = true,
                 ),
@@ -419,13 +426,13 @@ class MainActivityMonitoringLogicTest {
     }
 
 @Test
-    fun `runtime startup action uses controller for network-race client`() {
+    fun `runtime startup action uses controller for client role`() {
         assertEquals(
             RuntimeStartupAction.START_CONTROLLER,
             resolveRuntimeStartupAction(
                 com.paul.sprintsync.core.RuntimeDeviceConfig(
                     networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT,
-                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
                     profile = "default",
                     isControllerOnlyHost = false,
                 ),
@@ -440,7 +447,7 @@ class MainActivityMonitoringLogicTest {
             resolveRuntimeStartupAction(
                 com.paul.sprintsync.core.RuntimeDeviceConfig(
                     networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.NONE,
-                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
                     profile = "default",
                     isControllerOnlyHost = false,
                 ),

@@ -1,7 +1,5 @@
 package com.paul.sprintsync.core.services
 
-import com.paul.sprintsync.features.race_session.SessionClockSyncBinaryResponse
-
 sealed interface NearbyEvent {
     data class EndpointFound(
         val endpointId: String,
@@ -28,11 +26,6 @@ sealed interface NearbyEvent {
     data class PayloadReceived(
         val endpointId: String,
         val message: String,
-    ) : NearbyEvent
-
-    data class ClockSyncSampleReceived(
-        val endpointId: String,
-        val sample: SessionClockSyncBinaryResponse,
     ) : NearbyEvent
 
     data class Error(

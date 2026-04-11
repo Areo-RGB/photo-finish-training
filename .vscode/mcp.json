@@ -1,22 +1,15 @@
 {
   "servers": {
-    "oraios/serena": {
-      "type": "stdio",
-      "command": "uvx",
+    "mcp-router": {
+      "command": "npx",
       "args": [
-        "--from",
-        "git+https://github.com/oraios/serena",
-        "serena",
-        "start-mcp-server",
-        "--context",
-        "ide",
-        "--project",
-        "${workspaceFolder}"
-      ]
-    },
-    "context-mode": {
-      "command": "context-mode"
+        "-y",
+        "@mcp_router/cli@latest",
+        "connect"
+      ],
+      "env": {
+        "MCPR_TOKEN": "mcpr_TahMkjnD5RCRbrliBlpq4eiYQSlGZZQF"
+      }
     }
-  },
-  "inputs": []
+  }
 }

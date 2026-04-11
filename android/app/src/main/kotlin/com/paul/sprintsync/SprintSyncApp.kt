@@ -206,7 +206,6 @@ fun SprintSyncApp(
                                     uiState.operatingMode == SessionOperatingMode.SINGLE_DEVICE -> "Controller"
                                 uiState.operatingMode == SessionOperatingMode.SINGLE_DEVICE -> "Single Device"
                                 uiState.stage == SessionStage.SETUP -> "Setup Session"
-                                uiState.stage == SessionStage.LOBBY -> "Race Lobby"
                                 else -> "Monitoring"
                             },
                             style = MaterialTheme.typography.headlineSmall,
@@ -215,11 +214,6 @@ fun SprintSyncApp(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (uiState.stage == SessionStage.LOBBY && uiState.isHost) {
-                                TextButton(onClick = onStopHosting) {
-                                    Text("Stop Hosting")
-                                }
-                            }
                             if (
                                 uiState.stage == SessionStage.MONITORING &&
                                 uiState.isHost
@@ -261,36 +255,6 @@ fun SprintSyncApp(
                         ConnectedDevicesListCard(
                             devices = uiState.devices,
                             showDebugInfo = showDebugInfo,
-                        )
-                    }
-                }
-
-                SessionStage.LOBBY -> {
-                    item {
-                        LobbyActionsCard(
-                            isHost = uiState.isHost,
-                            canStartMonitoring = uiState.canStartMonitoring,
-                            timelineFinished = uiState.startedSensorNanos != null && uiState.stoppedSensorNanos != null,
-                            onStartMonitoring = onStartMonitoring,
-                            onResetRun = onResetRun,
-                        )
-                    }
-                    item {
-                        LobbyPeersCard(
-                            devices = uiState.devices,
-                            hasConnectedPeers = uiState.hasConnectedPeers,
-                            connectionTypeLabel = uiState.monitoringConnectionTypeLabel,
-                            syncModeLabel = uiState.monitoringSyncModeLabel,
-                            latencyMs = uiState.monitoringLatencyMs,
-                        )
-                    }
-                    item {
-                        DeviceAssignmentsCard(
-                            devices = uiState.devices,
-                            editable = uiState.networkRole == SessionNetworkRole.HOST,
-                            showDebugInfo = showDebugInfo,
-                            onAssignRole = onAssignRole,
-                            onAssignCameraFacing = onAssignCameraFacing,
                         )
                     }
                 }
@@ -540,179 +504,6 @@ private fun SingleFlavorConnectingCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LobbyActionsCard(
-    isHost: Boolean,
-    canStartMonitoring: Boolean,
-    timelineFinished: Boolean,
-    onStartMonitoring: () -> Unit,
-    onResetRun: () -> Unit,
-) {
-    SprintSyncCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionHeader("Session Actions")
-            PrimaryButton(
-                text = "Start Monitoring",
-                onClick = onStartMonitoring,
-                enabled = isHost && canStartMonitoring,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (isHost && timelineFinished) {
-                OutlinedButton(onClick = onResetRun) {
-                    Text("Reset Run")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LobbyPeersCard(
-    devices: List<SessionDevice>,
-    hasConnectedPeers: Boolean,
-    connectionTypeLabel: String,
-    syncModeLabel: String,
-    latencyMs: Int?,
-) {
-    val latencyLabel = when (syncModeLabel) {
-        "NTP" -> if (latencyMs == null) "-" else "$latencyMs ms"
-        "GPS" -> "GPS"
-        else -> "-"
-    }
-    SprintSyncCard {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionHeader("Peers")
-            val peerNames = devices
-                .filterNot { it.isLocal }
-                .map { it.name }
-            if (peerNames.isEmpty()) {
-                Text("No peers connected yet.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            } else {
-                peerNames.forEach { name ->
-                    Text(name, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            Text(
-                text = if (hasConnectedPeers) "Connection: $connectionTypeLabel" else "Connection: Waiting for peers",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
-            )
-            Text(
-                text = "Sync: $syncModeLabel · Latency: $latencyLabel",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DeviceAssignmentsCard(
-    devices: List<SessionDevice>,
-    editable: Boolean,
-    showDebugInfo: Boolean,
-    onAssignRole: (String, SessionDeviceRole) -> Unit,
-    onAssignCameraFacing: (String, SessionCameraFacing) -> Unit,
-) {
-    SprintSyncCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionHeader("Device Roles")
-            if (editable) {
-                Text(
-                    "Assign roles to connected devices.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray,
-                )
-            }
-            devices.forEach { device ->
-                DeviceAssignmentRow(
-                    device = device,
-                    editable = editable,
-                    showDebugInfo = showDebugInfo,
-                    onAssignRole = onAssignRole,
-                    onAssignCameraFacing = onAssignCameraFacing,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DeviceAssignmentRow(
-    device: SessionDevice,
-    editable: Boolean,
-    showDebugInfo: Boolean,
-    onAssignRole: (String, SessionDeviceRole) -> Unit,
-    onAssignCameraFacing: (String, SessionCameraFacing) -> Unit,
-) {
-    var roleMenuExpanded by remember(device.id) { mutableStateOf(false) }
-
-    Card {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = if (device.isLocal) "${device.name} (Local)" else device.name,
-                fontWeight = FontWeight.Medium,
-            )
-            if (showDebugInfo) {
-                Text(device.id, style = MaterialTheme.typography.bodySmall)
-            }
-            if (editable) {
-                val roleOptions = deviceRoleOptions()
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SingleChoiceSegmentedButtonRow {
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            onClick = { onAssignCameraFacing(device.id, SessionCameraFacing.REAR) },
-                            selected = device.cameraFacing == SessionCameraFacing.REAR,
-                            label = { Text("Rear") },
-                        )
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            onClick = { onAssignCameraFacing(device.id, SessionCameraFacing.FRONT) },
-                            selected = device.cameraFacing == SessionCameraFacing.FRONT,
-                            label = { Text("Front") },
-                        )
-                    }
-
-                    Box {
-                        AssistChip(
-                            onClick = { roleMenuExpanded = true },
-                            label = { Text(sessionDeviceRoleLabel(device.role)) },
-                        )
-                        DropdownMenu(
-                            expanded = roleMenuExpanded,
-                            onDismissRequest = { roleMenuExpanded = false },
-                        ) {
-                            roleOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(sessionDeviceRoleLabel(option)) },
-                                    onClick = {
-                                        onAssignRole(device.id, option)
-                                        roleMenuExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                MetricDisplay(label = "Role", value = sessionDeviceRoleLabel(device.role))
-                MetricDisplay(label = "Camera", value = sessionCameraFacingLabel(device.cameraFacing))
             }
         }
     }
@@ -1495,15 +1286,10 @@ enum class SetupActionProfile {
 internal fun resolveSetupActionProfile(
     runtimeDeviceConfig: com.paul.sprintsync.core.RuntimeDeviceConfig,
 ): SetupActionProfile {
-    return when (runtimeDeviceConfig.operatingMode) {
-        com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE -> SetupActionProfile.SINGLE_ONLY
-        com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE -> {
-            when (runtimeDeviceConfig.networkRole) {
-                com.paul.sprintsync.core.RuntimeNetworkRole.HOST -> SetupActionProfile.DISPLAY_ONLY
-                com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT -> SetupActionProfile.CONTROLLER_ONLY
-                com.paul.sprintsync.core.RuntimeNetworkRole.NONE -> SetupActionProfile.SINGLE_ONLY
-            }
-        }
+    return when (runtimeDeviceConfig.networkRole) {
+        com.paul.sprintsync.core.RuntimeNetworkRole.HOST -> SetupActionProfile.DISPLAY_ONLY
+        com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT -> SetupActionProfile.CONTROLLER_ONLY
+        com.paul.sprintsync.core.RuntimeNetworkRole.NONE -> SetupActionProfile.SINGLE_ONLY
     }
 }
 
@@ -1631,16 +1417,6 @@ internal fun clampDisplayLabelFont(base: TextUnit, rowHeight: Dp, density: andro
     val minReadable = 12.sp
     val clamped = minOf(base.value, maxByHeight.value).sp
     return maxOf(clamped.value, minReadable.value).sp
-}
-
-internal fun deviceRoleOptions(): List<SessionDeviceRole> {
-    return listOf(
-        SessionDeviceRole.UNASSIGNED,
-        SessionDeviceRole.START,
-        SessionDeviceRole.SPLIT,
-        SessionDeviceRole.STOP,
-        SessionDeviceRole.DISPLAY,
-    )
 }
 
 private fun formatDurationNanos(nanos: Long): String {

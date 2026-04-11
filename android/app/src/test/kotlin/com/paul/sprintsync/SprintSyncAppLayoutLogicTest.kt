@@ -51,7 +51,7 @@ class SprintSyncAppLayoutLogicTest {
             resolveSetupActionProfile(
                 com.paul.sprintsync.core.RuntimeDeviceConfig(
                     networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.HOST,
-                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
                     profile = "host_xiaomi",
                     isControllerOnlyHost = true,
                 ),
@@ -62,7 +62,7 @@ class SprintSyncAppLayoutLogicTest {
             resolveSetupActionProfile(
                 com.paul.sprintsync.core.RuntimeDeviceConfig(
                     networkRole = com.paul.sprintsync.core.RuntimeNetworkRole.CLIENT,
-                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.NETWORK_RACE,
+                    operatingMode = com.paul.sprintsync.core.RuntimeOperatingMode.SINGLE_DEVICE,
                     profile = "default",
                     isControllerOnlyHost = false,
                 ),
@@ -160,13 +160,6 @@ class SprintSyncAppLayoutLogicTest {
     }
 
     @Test
-    fun `device role options include split and display roles`() {
-        val options = deviceRoleOptions()
-        assertTrue(options.contains(SessionDeviceRole.SPLIT))
-        assertTrue(options.contains(SessionDeviceRole.DISPLAY))
-    }
-
-    @Test
     fun `passive display client view only shows for monitoring single-device client display role`() {
         assertTrue(
             shouldShowPassiveDisplayClientView(
@@ -178,7 +171,7 @@ class SprintSyncAppLayoutLogicTest {
         )
         assertFalse(
             shouldShowPassiveDisplayClientView(
-                stage = com.paul.sprintsync.features.race_session.SessionStage.LOBBY,
+                stage = com.paul.sprintsync.features.race_session.SessionStage.SETUP,
                 operatingMode = SessionOperatingMode.SINGLE_DEVICE,
                 networkRole = com.paul.sprintsync.features.race_session.SessionNetworkRole.CLIENT,
                 localRole = SessionDeviceRole.DISPLAY,

@@ -20,14 +20,14 @@ internal object DeviceDetector {
             normalizedModel == XIAOMI_PAD_MODEL &&
                 normalizedManufacturer.contains("XIAOMI") -> RuntimeDeviceConfig(
                 networkRole = RuntimeNetworkRole.HOST,
-                operatingMode = RuntimeOperatingMode.NETWORK_RACE,
+                operatingMode = RuntimeOperatingMode.SINGLE_DEVICE,
                 profile = "host_xiaomi",
                 isControllerOnlyHost = true,
             )
             normalizedModel == ONEPLUS_MODEL &&
                 normalizedManufacturer.contains("ONEPLUS") -> RuntimeDeviceConfig(
                 networkRole = RuntimeNetworkRole.CLIENT,
-                operatingMode = RuntimeOperatingMode.NETWORK_RACE,
+                operatingMode = RuntimeOperatingMode.SINGLE_DEVICE,
                 profile = "default",
                 isControllerOnlyHost = false,
             )
