@@ -22,6 +22,7 @@ enum class SessionNetworkRole {
 
 enum class SessionDeviceRole {
     UNASSIGNED,
+    CONTROLLER,
     DISPLAY,
 }
 
@@ -286,6 +287,7 @@ fun sessionCameraFacingFromName(name: String?): SessionCameraFacing? {
 fun sessionDeviceRoleLabel(role: SessionDeviceRole): String {
     return when (role) {
         SessionDeviceRole.UNASSIGNED -> "Unassigned"
+        SessionDeviceRole.CONTROLLER -> "Controller"
         SessionDeviceRole.DISPLAY -> "Display"
     }
 }

@@ -100,6 +100,7 @@ class RaceSessionModelsTest {
     @Test
     fun `device role label supports remaining roles`() {
         assertEquals("Unassigned", sessionDeviceRoleLabel(SessionDeviceRole.UNASSIGNED))
+        assertEquals("Controller", sessionDeviceRoleLabel(SessionDeviceRole.CONTROLLER))
         assertEquals("Display", sessionDeviceRoleLabel(SessionDeviceRole.DISPLAY))
         assertTrue(sessionDeviceRoleFromName("split") == null)
     }

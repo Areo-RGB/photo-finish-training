@@ -140,7 +140,7 @@ class RaceSessionController(
 
     fun startControllerMode() {
         val local = localDeviceFromState().copy(
-            role = SessionDeviceRole.DISPLAY,
+            role = SessionDeviceRole.CONTROLLER,
             isLocal = true,
         )
         _uiState.value = _uiState.value.copy(

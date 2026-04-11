@@ -363,6 +363,13 @@ class MainActivityMonitoringLogicTest {
                 localRole = SessionDeviceRole.DISPLAY,
             ),
         )
+        assertFalse(
+            shouldRunLocalMonitoring(
+                mode = SessionOperatingMode.SINGLE_DEVICE,
+                userMonitoringEnabled = true,
+                localRole = SessionDeviceRole.CONTROLLER,
+            ),
+        )
         assertTrue(
             shouldRunLocalMonitoring(
                 mode = SessionOperatingMode.SINGLE_DEVICE,
@@ -379,6 +386,13 @@ class MainActivityMonitoringLogicTest {
                 mode = SessionOperatingMode.SINGLE_DEVICE,
                 networkRole = SessionNetworkRole.CLIENT,
                 localRole = SessionDeviceRole.DISPLAY,
+            ),
+        )
+        assertFalse(
+            shouldUsePassiveDisplayClientMode(
+                mode = SessionOperatingMode.SINGLE_DEVICE,
+                networkRole = SessionNetworkRole.CLIENT,
+                localRole = SessionDeviceRole.CONTROLLER,
             ),
         )
         assertFalse(

@@ -1455,7 +1455,11 @@ internal fun shouldRunLocalMonitoring(
     userMonitoringEnabled: Boolean,
     localRole: SessionDeviceRole,
 ): Boolean {
-    if (mode == SessionOperatingMode.DISPLAY_HOST || localRole == SessionDeviceRole.DISPLAY) {
+    if (
+        mode == SessionOperatingMode.DISPLAY_HOST ||
+        localRole == SessionDeviceRole.DISPLAY ||
+        localRole == SessionDeviceRole.CONTROLLER
+    ) {
         return false
     }
     return userMonitoringEnabled

@@ -111,7 +111,7 @@ class RaceSessionControllerTest {
         assertEquals(SessionOperatingMode.SINGLE_DEVICE, state.operatingMode)
         assertEquals(SessionNetworkRole.CLIENT, state.networkRole)
         assertEquals(SessionStage.MONITORING, state.stage)
-        assertEquals(SessionDeviceRole.DISPLAY, state.deviceRole)
+        assertEquals(SessionDeviceRole.CONTROLLER, state.deviceRole)
         assertFalse(state.monitoringActive)
     }
 
