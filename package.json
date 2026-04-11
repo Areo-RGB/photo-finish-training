@@ -2,13 +2,17 @@
   "name": "sprint-sync-tools",
   "private": true,
   "scripts": {
-    "build:debug:apk": "cd android && gradlew.bat :app:assembleDebug",
+    "build:debug:apk": "npm run build:flavor:apks",
     "build:release:apk": "cd android && gradlew.bat :app:assembleRelease",
     "build:flavor:apks": "cd android && gradlew.bat :app:assembleXiaomiPadDisplayDebug :app:assemblePixel7SingleDebug :app:assembleOneplusSingleDebug :app:assembleTopazSingleDebug :app:assembleEmlL29SingleDebug",
-    "install:flavor:devices": "node scripts/install-debug-device-flavors-adb.mjs",
+    "install:flavor:devices": "node scripts/install-debug-device-flavors-adb-install-only.mjs",
+    "run:flavor:devices": "node scripts/install-debug-device-flavors-adb.mjs",
     "rebuild:flavor:devices": "npm run build:flavor:apks && npm run install:flavor:devices",
-    "rebuild:debug:devices": "npm run build:debug:apk && node scripts/install-debug-apk.mjs",
+    "install:debug:devices": "npm run install:flavor:devices",
+    "run:debug:devices": "npm run run:flavor:devices",
+    "rebuild:debug:devices": "npm run rebuild:flavor:devices",
     "install:release:devices": "node scripts/install-release-apk.mjs",
     "rebuild:release:devices": "npm run build:release:apk && node scripts/install-release-apk.mjs",
-    "install:debug:devices:build": "npm run rebuild:debug:devices"
-}}
+    "install:debug:devices:build": "npm run rebuild:flavor:devices"
+  }
+}
