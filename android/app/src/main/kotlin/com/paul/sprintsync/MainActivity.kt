@@ -1,8 +1,10 @@
 package com.paul.sprintsync
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -57,6 +59,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         private const val MAX_PENDING_LAPS = 100
         private const val GPS_LOCK_VALIDITY_NANOS = 10_000_000_000L
         private const val GPS_REACQUIRE_REQUEST_THROTTLE_NANOS = 5_000_000_000L
+        private const val TARGET_MONITORING_WIFI_SSID = "TP-Link_86CA_5G"
     }
 
     private lateinit var sensorNativeController: SensorNativeController
@@ -290,6 +293,9 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         updateUiState { copy(networkSummary = "Stopped") }
                         appendEvent("hosting stopped")
                         syncControllerSummaries()
+                    },
+                    onOpenWifiSettings = {
+                        startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
                     },
                 )
             }
@@ -973,6 +979,12 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         }
         val monitoringLatencyMs: Int? = null
         val clockLockWarningText: String? = null
+        val connectedWifiSsid = currentConnectedWifiSsid()
+        val wifiWarningText = when {
+            isConnectedToExpectedWifi(connectedWifiSsid, TARGET_MONITORING_WIFI_SSID) -> null
+            connectedWifiSsid == null -> "Connect to Wi-Fi \"$TARGET_MONITORING_WIFI_SSID\"."
+            else -> "Connected to \"$connectedWifiSsid\". Use \"$TARGET_MONITORING_WIFI_SSID\"."
+        }
 
         val runStatusLabel = when {
             timelineForUi.hostStartSensorNanos == null -> "Ready"
@@ -1055,6 +1067,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                 monitoringLatencyMs = monitoringLatencyMs,
                 hasConnectedPeers = hasPeers,
                 clockLockWarningText = clockLockWarningText,
+                wifiWarningText = wifiWarningText,
                 runStatusLabel = runStatusLabel,
                 runMarksCount = marksCount,
                 elapsedDisplay = elapsedDisplay,
@@ -1347,6 +1360,34 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
 
     private fun logRuntimeDiagnostic(message: String) {
         Log.d(TAG, "diag: $message")
+    }
+
+    @Suppress("DEPRECATION")
+    private fun currentConnectedWifiSsid(): String? {
+        val wifiManager = ContextCompat.getSystemService(applicationContext, WifiManager::class.java)
+            ?: return null
+        if (!wifiManager.isWifiEnabled) {
+            return null
+        }
+        return normalizeWifiSsid(wifiManager.connectionInfo?.ssid)
+    }
+
+    private fun normalizeWifiSsid(rawSsid: String?): String? {
+        val value = rawSsid?.trim().orEmpty()
+        if (value.isEmpty() || value.equals("<unknown ssid>", ignoreCase = true)) {
+            return null
+        }
+        return if (value.length >= 2 && value.first() == '"' && value.last() == '"') {
+            value.substring(1, value.length - 1).trim().ifEmpty { null }
+        } else {
+            value
+        }
+    }
+
+    private fun isConnectedToExpectedWifi(currentSsid: String?, expectedSsid: String): Boolean {
+        val current = normalizeWifiSsid(currentSsid) ?: return false
+        val expected = normalizeWifiSsid(expectedSsid) ?: return false
+        return current == expected
     }
 }
 

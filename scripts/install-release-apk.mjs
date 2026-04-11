@@ -22,6 +22,7 @@ function fail(message, detail = '') {
 }
 
 const appId = 'training.variant';
+const legacyPackagePrefix = 'training.variant.';
 const apkCandidates = [
   resolve(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk'),
   // Legacy fallback for older custom Gradle layout.
@@ -58,12 +59,78 @@ if (readyDeviceIds.length === 0) {
   fail('No ready Android devices found. Connect devices and run "adb devices".');
 }
 
+function parseListedPackages(output) {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('package:'))
+    .map((line) => line.replace(/^package:/, '').trim())
+    .filter((pkg) => pkg.length > 0);
+}
+
+function listTrainingPackages(serial) {
+  const result = run('adb', ['-s', serial, 'shell', 'pm', 'list', 'packages', 'training.variant']);
+  if (result.status !== 0) {
+    return [];
+  }
+  return parseListedPackages(result.stdout || '');
+}
+
+function isSuccessOutput(output) {
+  return output.includes('Success') || output.includes('DELETE_SUCCEEDED');
+}
+
+function uninstallLegacyPackages(serial) {
+  const installed = listTrainingPackages(serial);
+  const legacyPackages = installed.filter((pkg) => pkg !== appId && pkg.startsWith(legacyPackagePrefix));
+
+  for (const legacyPackage of legacyPackages) {
+    console.log(`Removing legacy package ${legacyPackage} from ${serial}...`);
+    const uninstallResult = run('adb', ['-s', serial, 'uninstall', legacyPackage]);
+    const uninstallOutput = `${uninstallResult.stdout}\n${uninstallResult.stderr}`.trim();
+    if (uninstallResult.status !== 0 || !isSuccessOutput(uninstallOutput)) {
+      console.warn(`Legacy package removal failed for ${legacyPackage} on ${serial}.`);
+      if (uninstallOutput.length > 0) {
+        console.warn(uninstallOutput);
+      }
+    }
+  }
+}
+
+function forceStopPackages(serial, packages) {
+  for (const packageName of packages) {
+    run('adb', ['-s', serial, 'shell', 'am', 'force-stop', packageName]);
+  }
+}
+
 let failedInstalls = 0;
 let failedLaunches = 0;
 for (const deviceId of readyDeviceIds) {
+  uninstallLegacyPackages(deviceId);
+
   console.log(`Installing release APK on ${deviceId}...`);
-  const installResult = run('adb', ['-s', deviceId, 'install', '-r', apkPath]);
-  const output = `${installResult.stdout}\n${installResult.stderr}`.trim();
+  let installResult = run('adb', ['-s', deviceId, 'install', '-r', apkPath]);
+  let output = `${installResult.stdout}\n${installResult.stderr}`.trim();
+
+  const signatureMismatch =
+    installResult.status !== 0 && output.includes('INSTALL_FAILED_UPDATE_INCOMPATIBLE');
+  if (signatureMismatch) {
+    console.log(`Signature mismatch on ${deviceId} for ${appId}. Uninstalling and retrying...`);
+    const uninstallResult = run('adb', ['-s', deviceId, 'uninstall', appId]);
+    const uninstallOutput = `${uninstallResult.stdout}\n${uninstallResult.stderr}`.trim();
+    const uninstallSucceeded = uninstallResult.status === 0 && isSuccessOutput(uninstallOutput);
+    if (!uninstallSucceeded) {
+      failedInstalls += 1;
+      console.error(`Uninstall failed on ${deviceId} for ${appId}.`);
+      if (uninstallOutput.length > 0) {
+        console.error(uninstallOutput);
+      }
+      continue;
+    }
+
+    installResult = run('adb', ['-s', deviceId, 'install', '-r', apkPath]);
+    output = `${installResult.stdout}\n${installResult.stderr}`.trim();
+  }
 
   if (installResult.status !== 0 || !output.includes('Success')) {
     failedInstalls += 1;
@@ -75,6 +142,7 @@ for (const deviceId of readyDeviceIds) {
   }
 
   console.log(`Install success on ${deviceId}.`);
+  forceStopPackages(deviceId, listTrainingPackages(deviceId));
 
   console.log(`Launching ${appId} on ${deviceId}...`);
   const launchResult = run('adb', [

@@ -10,21 +10,19 @@ Cross-platform app code lives in a separate companion repository in this workspa
 2. `npm run install:debug:devices`
 3. `npm run run:debug:devices`
 
-## Flavor Matrix
+## Runtime Device Roles (Single APK)
 
-| Device | Flavor | Role | TCP Host |
+| Device | Detection Rule | Role | TCP Host |
 | --- | --- | --- | --- |
-| Xiaomi Pad 7 | `xiaomiPadDisplay` | display / host | `192.168.0.103:9000` |
-| Pixel 7 | `pixel7Single` | single / client | `192.168.0.103:9000` |
-| OnePlus | `oneplusSingle` | controller / client | `192.168.0.103:9000` |
-| Xiaomi Topaz | `topazSingle` | single / client | `192.168.0.103:9000` |
-| Huawei EML-L29 | `emlL29Single` | single / client | `192.168.0.103:9000` |
+| Xiaomi Pad 7 | model `2410CRP4CG` + manufacturer `Xiaomi` | display / host | `192.168.0.103:9000` |
+| OnePlus | model `CPH2399` + manufacturer `OnePlus` | controller / client | `192.168.0.103:9000` |
+| Any other device | fallback | single-device default | `192.168.0.103:9000` |
 
-Use `npm run build:flavor:apks` and `npm run install:flavor:devices` to install the role-specific debug APKs across attached devices.
+All devices install the same debug package (`training.variant`). Runtime role is selected by `DeviceDetector`.
 
 ## Native Test Command
 
-`cd android && gradlew.bat :app:testXiaomiPadDisplayDebugUnitTest`
+`cd android && gradlew.bat :app:testDebugUnitTest`
 
 ## Android Quality Commands
 

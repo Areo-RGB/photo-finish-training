@@ -3,6 +3,7 @@ package com.paul.sprintsync
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,6 +96,7 @@ data class SprintSyncUiState(
     val monitoringLatencyMs: Int? = null,
     val hasConnectedPeers: Boolean = false,
     val clockLockWarningText: String? = null,
+    val wifiWarningText: String? = null,
     val runStatusLabel: String = "Ready",
     val runMarksCount: Int = 0,
     val elapsedDisplay: String = "00.00",
@@ -159,6 +161,7 @@ fun SprintSyncApp(
     onUpdateRoiWidth: (Double) -> Unit,
     onUpdateCooldown: (Int) -> Unit,
     onStopHosting: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
 ) {
     var showPreview by rememberSaveable { mutableStateOf(true) }
     var showDebugInfo by rememberSaveable { mutableStateOf(false) }
@@ -231,6 +234,15 @@ fun SprintSyncApp(
             if (showDebugInfo && uiState.stage != SessionStage.MONITORING && !isDisplayHostMode) {
                 item {
                     StatusCard(uiState)
+                }
+            }
+
+            if (uiState.wifiWarningText != null && !isDisplayHostMode) {
+                item {
+                    WifiWarningCard(
+                        text = uiState.wifiWarningText,
+                        onClick = onOpenWifiSettings,
+                    )
                 }
             }
 
@@ -979,6 +991,22 @@ private fun ClockWarningCard(text: String) {
             verticalAlignment = Alignment.Top,
         ) {
             Text("!", color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(8.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun WifiWarningCard(text: String, onClick: () -> Unit) {
+    SprintSyncCard(
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Wi-Fi", color = Color(0xFFA16207), style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.width(8.dp))
             Text(text, style = MaterialTheme.typography.bodySmall)
         }

@@ -34,60 +34,6 @@ android {
         resValue("string", "app_name", "training.variant")
     }
 
-    flavorDimensions += "deviceProfile"
-    productFlavors {
-        create("xiaomiPadDisplay") {
-            dimension = "deviceProfile"
-            applicationIdSuffix = ".xiaomi.display"
-            versionNameSuffix = "-xiaomi-display"
-            buildConfigField("boolean", "TCP_ONLY", "true")
-            buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "true")
-            resValue("string", "app_name", "training.variant display")
-        }
-        create("pixel7Single") {
-            dimension = "deviceProfile"
-            applicationIdSuffix = ".pixel7.single"
-            versionNameSuffix = "-pixel7-single"
-            buildConfigField("boolean", "TCP_ONLY", "true")
-            buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
-            resValue("string", "app_name", "training.variant pixel 7")
-        }
-        create("oneplusSingle") {
-            dimension = "deviceProfile"
-            applicationIdSuffix = ".oneplus.single"
-            versionNameSuffix = "-oneplus-single"
-            buildConfigField("boolean", "TCP_ONLY", "true")
-            buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
-            resValue("string", "app_name", "training.variant oneplus")
-        }
-        create("topazSingle") {
-            dimension = "deviceProfile"
-            applicationIdSuffix = ".topaz.single"
-            versionNameSuffix = "-topaz-single"
-            buildConfigField("boolean", "TCP_ONLY", "true")
-            buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
-            resValue("string", "app_name", "training.variant topaz")
-        }
-        create("emlL29Single") {
-            dimension = "deviceProfile"
-            applicationIdSuffix = ".emll29.single"
-            versionNameSuffix = "-emll29-single"
-            buildConfigField("boolean", "TCP_ONLY", "true")
-            buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
-            buildConfigField("int", "TCP_HOST_PORT", "9000")
-            buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
-            resValue("string", "app_name", "training.variant eml-l29")
-        }
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -149,7 +95,7 @@ tasks.withType<Test>().configureEach {
 }
 
 tasks.register<JacocoReport>("jacocoTestReport") {
-    dependsOn("testXiaomiPadDisplayDebugUnitTest")
+    dependsOn("testDebugUnitTest")
 
     reports {
         xml.required.set(true)
@@ -168,7 +114,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         )
 
     val kotlinClasses =
-        fileTree("${layout.buildDirectory.get()}/tmp/kotlin-classes/xiaomiPadDisplayDebug") {
+        fileTree("${layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
             exclude(coverageExclusions)
         }
 

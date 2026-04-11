@@ -13,14 +13,6 @@ function run(command, args) {
   return result;
 }
 
-function readDeviceProp(serial, prop) {
-  const result = run('adb', ['-s', serial, 'shell', 'getprop', prop]);
-  if (result.status !== 0) {
-    return '';
-  }
-  return (result.stdout || '').trim();
-}
-
 function fail(message, detail = '') {
   console.error(message);
   if (detail.trim().length > 0) {
@@ -29,107 +21,19 @@ function fail(message, detail = '') {
   process.exit(1);
 }
 
-const flavorTargets = [
-  {
-    id: 'xiaomiPadDisplay',
-    modelMatchers: ['2410CRP4CG', 'Xiaomi_Pad_7', 'Pad_7'],
-    apkCandidates: [
-      resolve(
-        process.cwd(),
-        'android',
-        'app',
-        'build',
-        'outputs',
-        'apk',
-        'xiaomiPadDisplay',
-        'debug',
-        'app-xiaomiPadDisplay-debug.apk',
-      ),
-    ],
-    appId: 'training.variant.xiaomi.display',
-  },
-  {
-    id: 'pixel7Single',
-    modelMatchers: ['Pixel 7', 'pixel_7', 'panther'],
-    apkCandidates: [
-      resolve(
-        process.cwd(),
-        'android',
-        'app',
-        'build',
-        'outputs',
-        'apk',
-        'pixel7Single',
-        'debug',
-        'app-pixel7Single-debug.apk',
-      ),
-    ],
-    appId: 'training.variant.pixel7.single',
-  },
-  {
-    id: 'oneplusSingle',
-    modelMatchers: ['CPH2399', 'cph2399', 'OnePlus'],
-    apkCandidates: [
-      resolve(
-        process.cwd(),
-        'android',
-        'app',
-        'build',
-        'outputs',
-        'apk',
-        'oneplusSingle',
-        'debug',
-        'app-oneplusSingle-debug.apk',
-      ),
-    ],
-    appId: 'training.variant.oneplus.single',
-  },
-  {
-    id: 'topazSingle',
-    modelMatchers: ['23021RAA2Y', 'topaz'],
-    apkCandidates: [
-      resolve(
-        process.cwd(),
-        'android',
-        'app',
-        'build',
-        'outputs',
-        'apk',
-        'topazSingle',
-        'debug',
-        'app-topazSingle-debug.apk',
-      ),
-    ],
-    appId: 'training.variant.topaz.single',
-  },
-  {
-    id: 'emlL29Single',
-    modelMatchers: ['EML_L29', 'EML-L29'],
-    apkCandidates: [
-      resolve(
-        process.cwd(),
-        'android',
-        'app',
-        'build',
-        'outputs',
-        'apk',
-        'emlL29Single',
-        'debug',
-        'app-emlL29Single-debug.apk',
-      ),
-    ],
-    appId: 'training.variant.emll29.single',
-  },
+const appId = 'training.variant';
+const legacyPackagePrefix = 'training.variant.';
+const apkCandidates = [
+  resolve(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+  // Legacy fallback for older custom Gradle layout.
+  resolve(process.cwd(), 'build', 'app', 'outputs', 'apk', 'debug', 'app-debug.apk'),
 ];
+const apkPath = apkCandidates.find((path) => existsSync(path));
 
-for (const target of flavorTargets) {
-  const apkPath = target.apkCandidates.find((path) => existsSync(path));
-  if (!apkPath) {
-    fail(
-      `APK for ${target.id} not found. Expected one of:\n- ${target.apkCandidates.join('\n- ')}\nRun "npm run build:flavor:apks" first.`,
-    );
-  }
-  target.apkPath = apkPath;
+if (!apkPath) {
+  fail(
+    `Debug APK not found in expected paths:\n- ${apkCandidates.join('\n- ')}\nRun "npm run build:debug:apk" first.`,
+  );
 }
 
 const devicesResult = run('adb', ['devices', '-l']);
@@ -151,80 +55,84 @@ for (const line of lines) {
   const serial = parts[0];
   const modelPart = parts.find((part) => part.startsWith('model:')) ?? '';
   const model = modelPart.replace(/^model:/, '');
-  readyDevices.push({ serial, model, raw: line });
+  readyDevices.push({ serial, model });
 }
 
 if (readyDevices.length === 0) {
   fail('No ready Android devices found. Connect devices and run "adb devices -l".');
 }
 
-function collectDeviceIdentifiers(device) {
-  const props = [
-    'ro.product.model',
-    'ro.product.device',
-    'ro.product.name',
-    'ro.product.brand',
-    'ro.product.manufacturer',
-    'ro.build.product',
-  ];
-  const values = props
-    .map((prop) => readDeviceProp(device.serial, prop))
-    .filter((value) => value.length > 0);
-  return [device.model, ...values, device.raw]
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+function parseListedPackages(output) {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('package:'))
+    .map((line) => line.replace(/^package:/, '').trim())
+    .filter((pkg) => pkg.length > 0);
 }
 
-function targetForDevice(device) {
-  const identifiers = collectDeviceIdentifiers(device);
-  const normalized = identifiers.join(' | ').toLowerCase();
-  const target = flavorTargets.find((candidate) =>
-    candidate.modelMatchers.some((matcher) => normalized.includes(matcher.toLowerCase())),
-  );
-  return { target, identifiers };
+function listTrainingPackages(serial) {
+  const result = run('adb', ['-s', serial, 'shell', 'pm', 'list', 'packages', 'training.variant']);
+  if (result.status !== 0) {
+    return [];
+  }
+  return parseListedPackages(result.stdout || '');
+}
+
+function isSuccessOutput(output) {
+  return output.includes('Success') || output.includes('DELETE_SUCCEEDED');
+}
+
+function uninstallLegacyPackages(serial) {
+  const installed = listTrainingPackages(serial);
+  const legacyPackages = installed.filter((pkg) => pkg !== appId && pkg.startsWith(legacyPackagePrefix));
+
+  for (const legacyPackage of legacyPackages) {
+    console.log(`Removing legacy package ${legacyPackage} from ${serial}...`);
+    const uninstallResult = run('adb', ['-s', serial, 'uninstall', legacyPackage]);
+    const uninstallOutput = `${uninstallResult.stdout}\n${uninstallResult.stderr}`.trim();
+    if (uninstallResult.status !== 0 || !isSuccessOutput(uninstallOutput)) {
+      console.warn(`Legacy package removal failed for ${legacyPackage} on ${serial}.`);
+      if (uninstallOutput.length > 0) {
+        console.warn(uninstallOutput);
+      }
+    }
+  }
+}
+
+function forceStopPackages(serial, packages) {
+  for (const packageName of packages) {
+    run('adb', ['-s', serial, 'shell', 'am', 'force-stop', packageName]);
+  }
 }
 
 let installs = 0;
-let skipped = 0;
 let failed = 0;
 
 for (const device of readyDevices) {
-  const { target, identifiers } = targetForDevice(device);
-  if (!target) {
-    skipped += 1;
-    console.log(
-      `Skipping ${device.serial} (${device.model || 'unknown model'}): no flavor mapping. Identifiers: ${identifiers.join(
-        ', ',
-      )}`,
-    );
-    continue;
-  }
+  uninstallLegacyPackages(device.serial);
 
-  console.log(`Installing ${target.id} on ${device.serial} (${device.model})...`);
-  let installResult = run('adb', ['-s', device.serial, 'install', '-r', target.apkPath]);
+  console.log(`Installing debug APK on ${device.serial} (${device.model || 'unknown model'})...`);
+  let installResult = run('adb', ['-s', device.serial, 'install', '-r', apkPath]);
   let installOutput = `${installResult.stdout}\n${installResult.stderr}`.trim();
 
   const signatureMismatch =
     installResult.status !== 0 && installOutput.includes('INSTALL_FAILED_UPDATE_INCOMPATIBLE');
   if (signatureMismatch) {
-    console.log(
-      `Signature mismatch on ${device.serial} for ${target.appId}. Uninstalling existing package and retrying install...`,
-    );
-    const uninstallResult = run('adb', ['-s', device.serial, 'uninstall', target.appId]);
+    console.log(`Signature mismatch on ${device.serial} for ${appId}. Uninstalling and retrying...`);
+    const uninstallResult = run('adb', ['-s', device.serial, 'uninstall', appId]);
     const uninstallOutput = `${uninstallResult.stdout}\n${uninstallResult.stderr}`.trim();
-    const uninstallSucceeded =
-      uninstallResult.status === 0 &&
-      (uninstallOutput.includes('Success') || uninstallOutput.includes('DELETE_SUCCEEDED'));
+    const uninstallSucceeded = uninstallResult.status === 0 && isSuccessOutput(uninstallOutput);
     if (!uninstallSucceeded) {
       failed += 1;
-      console.error(`Uninstall failed on ${device.serial} for ${target.appId}.`);
+      console.error(`Uninstall failed on ${device.serial} for ${appId}.`);
       if (uninstallOutput.length > 0) {
         console.error(uninstallOutput);
       }
       continue;
     }
 
-    installResult = run('adb', ['-s', device.serial, 'install', '-r', target.apkPath]);
+    installResult = run('adb', ['-s', device.serial, 'install', '-r', apkPath]);
     installOutput = `${installResult.stdout}\n${installResult.stderr}`.trim();
   }
 
@@ -237,12 +145,39 @@ for (const device of readyDevices) {
     continue;
   }
 
+  forceStopPackages(device.serial, listTrainingPackages(device.serial));
+
+  const launchResult = run('adb', [
+    '-s',
+    device.serial,
+    'shell',
+    'monkey',
+    '-p',
+    appId,
+    '-c',
+    'android.intent.category.LAUNCHER',
+    '1',
+  ]);
+  const launchOutput = `${launchResult.stdout}\n${launchResult.stderr}`.trim();
+  const launchSucceeded =
+    launchResult.status === 0 &&
+    !launchOutput.includes('No activities found') &&
+    !launchOutput.includes('Error');
+  if (!launchSucceeded) {
+    failed += 1;
+    console.error(`Launch failed on ${device.serial}.`);
+    if (launchOutput.length > 0) {
+      console.error(launchOutput);
+    }
+    continue;
+  }
+
   installs += 1;
-  console.log(`Install success on ${device.serial}.`);
+  console.log(`Install + launch success on ${device.serial}.`);
 }
 
 if (failed > 0) {
-  fail(`Completed with ${failed} failure(s). Successful installs: ${installs}, skipped: ${skipped}.`);
+  fail(`Completed with ${failed} failure(s). Successful installs: ${installs}.`);
 }
 
-console.log(`Done. Successful installs: ${installs}, skipped: ${skipped}.`);
+console.log(`Done. Successful installs: ${installs}.`);
