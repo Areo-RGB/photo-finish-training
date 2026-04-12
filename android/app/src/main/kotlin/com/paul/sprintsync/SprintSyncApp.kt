@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -177,23 +178,32 @@ fun SprintSyncApp(
         networkRole = uiState.networkRole,
         localRole = uiState.localRole,
     )
+    val isFullscreenDisplayResultsMode = isDisplayHostMode || isPassiveDisplayClientMode
+    val contentHorizontalPadding = when {
+        isFullscreenDisplayResultsMode -> 0.dp
+        isHostXiaomiProfile -> 6.dp
+        else -> 16.dp
+    }
+    val contentVerticalPadding = if (isFullscreenDisplayResultsMode) 0.dp else 12.dp
 
     Scaffold(
         topBar = {},
     ) { paddingValues ->
+        val scaffoldPadding = if (isFullscreenDisplayResultsMode) PaddingValues(0.dp) else paddingValues
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
+                .background(if (isFullscreenDisplayResultsMode) Color.Black else Color.Transparent)
+                .padding(scaffoldPadding),
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
-                        horizontal = if (isDisplayHostMode || isHostXiaomiProfile) 6.dp else 16.dp,
-                        vertical = if (isDisplayHostMode) 6.dp else 12.dp,
+                        horizontal = contentHorizontalPadding,
+                        vertical = contentVerticalPadding,
                     ),
-                verticalArrangement = Arrangement.spacedBy(if (isDisplayHostMode) 4.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isFullscreenDisplayResultsMode) 0.dp else 12.dp),
             ) {
             item {
                 if (!isDisplayHostMode) {
@@ -1193,7 +1203,7 @@ private fun DisplayResultsCard(rows: List<DisplayLapRow>, modifier: Modifier = M
         val visibleCards = displayHorizontalVisibleCardSlots(count)
         val availableHeight = maxHeight.takeIf { it > 0.dp } ?: layout.rowHeight
         val cardHeight = availableHeight.coerceAtLeast(layout.minRowHeight)
-        val cardWidth = ((maxWidth - (layout.rowSpacing * (visibleCards - 1))) / visibleCards)
+        val cardWidth = ((maxWidth - (layout.dividerWidth * (visibleCards - 1))) / visibleCards)
             .coerceAtLeast(layout.minRowHeight)
         val rowContentWidth = (cardWidth - (layout.horizontalPadding * 2)).coerceAtLeast(1.dp)
         val clampedTimeFont = clampDisplayTimeFont(layout.timeFont, cardHeight, rowContentWidth, density)
@@ -1201,59 +1211,70 @@ private fun DisplayResultsCard(rows: List<DisplayLapRow>, modifier: Modifier = M
 
         LazyRow(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(layout.rowSpacing),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            items(rows) { row ->
+            itemsIndexed(rows) { index, row ->
                 val cardBackground = when {
                     row.isOverLimit -> Color(0xFFD32F2F)
                     row.isUnderLimit -> Color(0xFF2E7D32)
                     else -> displayCardBackground
                 }
                 val foregroundColor = if (row.isOverLimit || row.isUnderLimit) Color.White else displayDeviceColor
-                Column(
-                    modifier = Modifier
-                        .width(cardWidth)
-                        .height(cardHeight)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(cardBackground)
-                        .padding(horizontal = layout.horizontalPadding, vertical = layout.verticalPadding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                Row(
+                    modifier = Modifier.height(cardHeight),
                 ) {
-                    Text(
-                        text = row.deviceName,
-                        style = MaterialTheme.typography.bodySmall.merge(
-                            TextStyle(
-                                fontSize = clampedDeviceFont,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.5.sp,
-                            ),
-                        ),
-                        color = foregroundColor,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = row.lapTimeLabel,
-                        style = MaterialTheme.typography.displayLarge.merge(
-                            InterExtraBoldTabularTypography.merge(
+                    Column(
+                        modifier = Modifier
+                            .width(cardWidth)
+                            .height(cardHeight)
+                            .background(cardBackground)
+                            .padding(horizontal = layout.horizontalPadding, vertical = layout.verticalPadding),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = row.deviceName,
+                            style = MaterialTheme.typography.bodySmall.merge(
                                 TextStyle(
-                                    fontSize = clampedTimeFont,
+                                    fontSize = clampedDeviceFont,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.5.sp,
                                 ),
                             ),
-                        ),
-                        color = if (row.isOverLimit || row.isUnderLimit) Color.White else displayTimeColor,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                    row.limitLabel?.let { label ->
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall,
                             color = foregroundColor,
                             textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = row.lapTimeLabel,
+                            style = MaterialTheme.typography.displayLarge.merge(
+                                InterExtraBoldTabularTypography.merge(
+                                    TextStyle(
+                                        fontSize = clampedTimeFont,
+                                    ),
+                                ),
+                            ),
+                            color = if (row.isOverLimit || row.isUnderLimit) Color.White else displayTimeColor,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                        row.limitLabel?.let { label ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = foregroundColor,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    if (index < rows.lastIndex) {
+                        Box(
+                            modifier = Modifier
+                                .width(layout.dividerWidth)
+                                .height(cardHeight)
+                                .background(Color.Black),
                         )
                     }
                 }
@@ -1373,7 +1394,7 @@ internal fun shouldShowPassiveDisplayClientView(
 internal data class DisplayLayoutSpec(
     val rowHeight: Dp,
     val minRowHeight: Dp,
-    val rowSpacing: Dp,
+    val dividerWidth: Dp,
     val horizontalPadding: Dp,
     val verticalPadding: Dp,
     val timeFont: TextUnit,
@@ -1385,7 +1406,7 @@ internal fun displayLayoutSpecForCount(count: Int): DisplayLayoutSpec {
         count <= 1 -> DisplayLayoutSpec(
             rowHeight = 420.dp,
             minRowHeight = 300.dp,
-            rowSpacing = 24.dp,
+            dividerWidth = 4.dp,
             horizontalPadding = 26.dp,
             verticalPadding = 22.dp,
             timeFont = 168.sp,
@@ -1394,7 +1415,7 @@ internal fun displayLayoutSpecForCount(count: Int): DisplayLayoutSpec {
         count == 2 -> DisplayLayoutSpec(
             rowHeight = 330.dp,
             minRowHeight = 230.dp,
-            rowSpacing = 18.dp,
+            dividerWidth = 4.dp,
             horizontalPadding = 22.dp,
             verticalPadding = 18.dp,
             timeFont = 138.sp,
@@ -1403,7 +1424,7 @@ internal fun displayLayoutSpecForCount(count: Int): DisplayLayoutSpec {
         count in 3..4 -> DisplayLayoutSpec(
             rowHeight = 245.dp,
             minRowHeight = 170.dp,
-            rowSpacing = 12.dp,
+            dividerWidth = 4.dp,
             horizontalPadding = 18.dp,
             verticalPadding = 14.dp,
             timeFont = 104.sp,
@@ -1412,7 +1433,7 @@ internal fun displayLayoutSpecForCount(count: Int): DisplayLayoutSpec {
         else -> DisplayLayoutSpec(
             rowHeight = 182.dp,
             minRowHeight = 130.dp,
-            rowSpacing = 8.dp,
+            dividerWidth = 4.dp,
             horizontalPadding = 14.dp,
             verticalPadding = 10.dp,
             timeFont = 72.sp,

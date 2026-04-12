@@ -209,6 +209,11 @@ class SprintSyncAppLayoutLogicTest {
     }
 
     @Test
+    fun `display layout keeps a thin divider between cards`() {
+        assertEquals(4.dp, displayLayoutSpecForCount(2).dividerWidth)
+    }
+
+    @Test
     fun `display host horizontal layout caps visible card slots`() {
         assertTrue(displayHorizontalVisibleCardSlots(1) == 1)
         assertTrue(displayHorizontalVisibleCardSlots(2) == 2)
