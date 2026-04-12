@@ -1468,7 +1468,7 @@ internal fun shouldKeepTimerRefreshActive(
     return monitoringActive && isAppResumed && !hasStopSensor
 }
 
-internal fun shouldUseLandscapeForMode(mode: SessionOperatingMode): Boolean = mode == SessionOperatingMode.DISPLAY_HOST
+internal fun shouldUseLandscapeForMode(mode: SessionOperatingMode): Boolean = false
 
 internal fun shouldUseImmersiveModeForMode(mode: SessionOperatingMode): Boolean =
     mode == SessionOperatingMode.DISPLAY_HOST
@@ -1590,5 +1590,5 @@ internal fun buildSplitHistoryForTimeline(
 internal fun requestedOrientationForMode(mode: SessionOperatingMode): Int = if (shouldUseLandscapeForMode(mode)) {
     ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 } else {
-    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
 }

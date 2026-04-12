@@ -222,15 +222,23 @@ class SprintSyncAppLayoutLogicTest {
     }
 
     @Test
+    fun `display layout stacks exactly two cards vertically`() {
+        assertFalse(shouldStackDisplayCardsVertically(1))
+        assertTrue(shouldStackDisplayCardsVertically(2))
+        assertFalse(shouldStackDisplayCardsVertically(3))
+    }
+
+    @Test
     fun `display time font clamp respects row height budget`() {
         val density = Density(1f)
         val clamped = clampDisplayTimeFont(
             base = 128.sp,
             rowHeight = 120.dp,
             rowContentWidth = 800.dp,
+            maxLabelLength = 8,
             density = density,
         )
-        assertTrue(clamped.value <= 88.8f)
+        assertTrue(clamped.value <= 93.6f)
     }
 
     @Test
@@ -240,9 +248,30 @@ class SprintSyncAppLayoutLogicTest {
             base = 140.sp,
             rowHeight = 320.dp,
             rowContentWidth = 330.dp,
+            maxLabelLength = 8,
             density = density,
         )
-        assertTrue(clamped.value <= 67f)
+        assertTrue(clamped.value <= 75f)
+    }
+
+    @Test
+    fun `display time font clamp allows larger text for shorter timer labels`() {
+        val density = Density(1f)
+        val shortLabel = clampDisplayTimeFont(
+            base = 184.sp,
+            rowHeight = 320.dp,
+            rowContentWidth = 500.dp,
+            maxLabelLength = 5,
+            density = density,
+        )
+        val longLabel = clampDisplayTimeFont(
+            base = 184.sp,
+            rowHeight = 320.dp,
+            rowContentWidth = 500.dp,
+            maxLabelLength = 8,
+            density = density,
+        )
+        assertTrue(shortLabel.value > longLabel.value)
     }
 
     @Test

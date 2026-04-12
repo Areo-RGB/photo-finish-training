@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -49,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -1200,85 +1203,216 @@ private fun DisplayResultsCard(rows: List<DisplayLapRow>, modifier: Modifier = M
         }
 
         val count = rows.size.coerceAtLeast(1)
-        val visibleCards = displayHorizontalVisibleCardSlots(count)
         val availableHeight = maxHeight.takeIf { it > 0.dp } ?: layout.rowHeight
-        val cardHeight = availableHeight.coerceAtLeast(layout.minRowHeight)
-        val cardWidth = ((maxWidth - (layout.dividerWidth * (visibleCards - 1))) / visibleCards)
-            .coerceAtLeast(layout.minRowHeight)
+        val stackVertically = shouldStackDisplayCardsVertically(count)
+        val visibleCards = if (stackVertically) 1 else displayHorizontalVisibleCardSlots(count)
+        val cardHeight = if (stackVertically) {
+            ((availableHeight - layout.dividerWidth) / count).coerceAtLeast(layout.minRowHeight)
+        } else {
+            availableHeight.coerceAtLeast(layout.minRowHeight)
+        }
+        val cardWidth = if (stackVertically) {
+            maxWidth.coerceAtLeast(layout.minRowHeight)
+        } else {
+            ((maxWidth - (layout.dividerWidth * (visibleCards - 1))) / visibleCards)
+                .coerceAtLeast(layout.minRowHeight)
+        }
         val rowContentWidth = (cardWidth - (layout.horizontalPadding * 2)).coerceAtLeast(1.dp)
-        val clampedTimeFont = clampDisplayTimeFont(layout.timeFont, cardHeight, rowContentWidth, density)
+        val widestLapTimeLabelLength = rows.maxOf { it.lapTimeLabel.length }
+        val clampedTimeFont = clampDisplayTimeFont(
+            base = layout.timeFont,
+            rowHeight = cardHeight,
+            rowContentWidth = rowContentWidth,
+            maxLabelLength = widestLapTimeLabelLength,
+            density = density,
+        )
         val clampedDeviceFont = clampDisplayLabelFont(layout.deviceFont, cardHeight, density)
 
-        LazyRow(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            itemsIndexed(rows) { index, row ->
-                val cardBackground = when {
-                    row.isOverLimit -> Color(0xFFD32F2F)
-                    row.isUnderLimit -> Color(0xFF2E7D32)
-                    else -> displayCardBackground
-                }
-                val foregroundColor = if (row.isOverLimit || row.isUnderLimit) Color.White else displayDeviceColor
-                Row(
-                    modifier = Modifier.height(cardHeight),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .width(cardWidth)
-                            .height(cardHeight)
-                            .background(cardBackground)
-                            .padding(horizontal = layout.horizontalPadding, vertical = layout.verticalPadding),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = row.deviceName,
-                            style = MaterialTheme.typography.bodySmall.merge(
-                                TextStyle(
-                                    fontSize = clampedDeviceFont,
-                                    fontWeight = FontWeight.SemiBold,
-                                    letterSpacing = 0.5.sp,
-                                ),
-                            ),
-                            color = foregroundColor,
-                            textAlign = TextAlign.Center,
+        if (stackVertically) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+            ) {
+                itemsIndexed(rows) { index, row ->
+                    Box {
+                        DisplayResultPanel(
+                            row = row,
+                            cardWidth = cardWidth,
+                            cardHeight = cardHeight,
+                            layout = layout,
+                            timeFont = clampedTimeFont,
+                            deviceFont = clampedDeviceFont,
+                            defaultCardBackground = displayCardBackground,
+                            defaultTimeColor = displayTimeColor,
+                            defaultDeviceColor = displayDeviceColor,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = row.lapTimeLabel,
-                            style = MaterialTheme.typography.displayLarge.merge(
-                                InterExtraBoldTabularTypography.merge(
-                                    TextStyle(
-                                        fontSize = clampedTimeFont,
-                                    ),
-                                ),
-                            ),
-                            color = if (row.isOverLimit || row.isUnderLimit) Color.White else displayTimeColor,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            softWrap = false,
+                        DisplayDirectionArrow(
+                            direction = if (index == 0) DisplayArrowDirection.LEFT else DisplayArrowDirection.RIGHT,
+                            modifier = Modifier
+                                .align(if (index == 0) Alignment.TopStart else Alignment.TopEnd)
+                                .fillMaxHeight(0.34f)
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
                         )
-                        row.limitLabel?.let { label ->
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = foregroundColor,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
                     }
                     if (index < rows.lastIndex) {
                         Box(
                             modifier = Modifier
-                                .width(layout.dividerWidth)
-                                .height(cardHeight)
+                                .fillMaxWidth()
+                                .height(layout.dividerWidth)
                                 .background(Color.Black),
                         )
                     }
                 }
             }
+        } else {
+            LazyRow(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+            ) {
+                itemsIndexed(rows) { index, row ->
+                    Row(
+                        modifier = Modifier.height(cardHeight),
+                    ) {
+                        DisplayResultPanel(
+                            row = row,
+                            cardWidth = cardWidth,
+                            cardHeight = cardHeight,
+                            layout = layout,
+                            timeFont = clampedTimeFont,
+                            deviceFont = clampedDeviceFont,
+                            defaultCardBackground = displayCardBackground,
+                            defaultTimeColor = displayTimeColor,
+                            defaultDeviceColor = displayDeviceColor,
+                        )
+                        if (index < rows.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .width(layout.dividerWidth)
+                                    .height(cardHeight)
+                                    .background(Color.Black),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DisplayResultPanel(
+    row: DisplayLapRow,
+    cardWidth: Dp,
+    cardHeight: Dp,
+    layout: DisplayLayoutSpec,
+    timeFont: TextUnit,
+    deviceFont: TextUnit,
+    defaultCardBackground: Color,
+    defaultTimeColor: Color,
+    defaultDeviceColor: Color,
+) {
+    val cardBackground = when {
+        row.isOverLimit -> Color(0xFFD32F2F)
+        row.isUnderLimit -> Color(0xFF2E7D32)
+        else -> defaultCardBackground
+    }
+    val foregroundColor = if (row.isOverLimit || row.isUnderLimit) Color.White else defaultDeviceColor
+    Box(
+        modifier = Modifier
+            .width(cardWidth)
+            .height(cardHeight)
+            .background(cardBackground),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = layout.horizontalPadding, vertical = layout.verticalPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = row.deviceName,
+                style = MaterialTheme.typography.bodySmall.merge(
+                    TextStyle(
+                        fontSize = deviceFont,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                    ),
+                ),
+                color = foregroundColor,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = row.lapTimeLabel,
+                style = MaterialTheme.typography.displayLarge.merge(
+                    InterExtraBoldTabularTypography.merge(
+                        TextStyle(
+                            fontSize = timeFont,
+                        ),
+                    ),
+                ),
+                color = if (row.isOverLimit || row.isUnderLimit) Color.White else defaultTimeColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+            )
+            row.limitLabel?.let { label ->
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = foregroundColor,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+private enum class DisplayArrowDirection {
+    LEFT,
+    RIGHT,
+}
+
+@Composable
+private fun DisplayDirectionArrow(direction: DisplayArrowDirection, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = if (direction == DisplayArrowDirection.LEFT) Alignment.CenterStart else Alignment.CenterEnd,
+    ) {
+        Canvas(modifier = Modifier.size(width = 136.dp, height = 96.dp)) {
+            val shaftHeight = size.height * 0.3f
+            val headWidth = size.width * 0.38f
+            val shaftStartX = if (direction == DisplayArrowDirection.LEFT) headWidth else 0f
+            val shaftEndX = if (direction == DisplayArrowDirection.LEFT) size.width else size.width - headWidth
+            drawRect(
+                color = Color.Black,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    x = shaftStartX,
+                    y = (size.height - shaftHeight) / 2f,
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    width = shaftEndX - shaftStartX,
+                    height = shaftHeight,
+                ),
+            )
+            val headPath = Path().apply {
+                if (direction == DisplayArrowDirection.LEFT) {
+                    moveTo(headWidth, 0f)
+                    lineTo(0f, size.height / 2f)
+                    lineTo(headWidth, size.height)
+                } else {
+                    moveTo(size.width - headWidth, 0f)
+                    lineTo(size.width, size.height / 2f)
+                    lineTo(size.width - headWidth, size.height)
+                }
+                close()
+            }
+            drawPath(
+                path = headPath,
+                color = Color.Black,
+            )
         }
     }
 }
@@ -1407,36 +1541,36 @@ internal fun displayLayoutSpecForCount(count: Int): DisplayLayoutSpec {
             rowHeight = 420.dp,
             minRowHeight = 300.dp,
             dividerWidth = 4.dp,
-            horizontalPadding = 26.dp,
-            verticalPadding = 22.dp,
-            timeFont = 168.sp,
+            horizontalPadding = 16.dp,
+            verticalPadding = 18.dp,
+            timeFont = 232.sp,
             deviceFont = 26.sp,
         )
         count == 2 -> DisplayLayoutSpec(
             rowHeight = 330.dp,
             minRowHeight = 230.dp,
             dividerWidth = 4.dp,
-            horizontalPadding = 22.dp,
-            verticalPadding = 18.dp,
-            timeFont = 138.sp,
+            horizontalPadding = 14.dp,
+            verticalPadding = 16.dp,
+            timeFont = 184.sp,
             deviceFont = 22.sp,
         )
         count in 3..4 -> DisplayLayoutSpec(
             rowHeight = 245.dp,
             minRowHeight = 170.dp,
             dividerWidth = 4.dp,
-            horizontalPadding = 18.dp,
-            verticalPadding = 14.dp,
-            timeFont = 104.sp,
+            horizontalPadding = 12.dp,
+            verticalPadding = 12.dp,
+            timeFont = 136.sp,
             deviceFont = 18.sp,
         )
         else -> DisplayLayoutSpec(
             rowHeight = 182.dp,
             minRowHeight = 130.dp,
             dividerWidth = 4.dp,
-            horizontalPadding = 14.dp,
-            verticalPadding = 10.dp,
-            timeFont = 72.sp,
+            horizontalPadding = 10.dp,
+            verticalPadding = 8.dp,
+            timeFont = 96.sp,
             deviceFont = 15.sp,
         )
     }
@@ -1448,15 +1582,18 @@ internal fun displayHorizontalVisibleCardSlots(count: Int): Int = when {
     else -> 3
 }
 
+internal fun shouldStackDisplayCardsVertically(count: Int): Boolean = count == 2
+
 internal fun clampDisplayTimeFont(
     base: TextUnit,
     rowHeight: Dp,
     rowContentWidth: Dp,
+    maxLabelLength: Int,
     density: androidx.compose.ui.unit.Density,
 ): TextUnit {
-    val maxByHeight = with(density) { (rowHeight * 0.74f).toSp() }
-    val maxChars = 8f // "MM:SS.cc"
-    val widthFactor = 0.62f // Approximate monospace glyph width in ems.
+    val maxByHeight = with(density) { (rowHeight * 0.78f).toSp() }
+    val maxChars = maxLabelLength.coerceAtLeast(5).toFloat()
+    val widthFactor = 0.55f // Inter ExtraBold digits are narrower than the previous budget assumed.
     val maxByWidth = with(density) { (rowContentWidth / (maxChars * widthFactor)).toSp() }
     return minOf(base.value, maxByHeight.value, maxByWidth.value).sp
 }

@@ -141,7 +141,7 @@ class MainActivityMonitoringLogicTest {
 
     @Test
     fun `display host mode prefers landscape orientation`() {
-        assertTrue(shouldUseLandscapeForMode(SessionOperatingMode.DISPLAY_HOST))
+        assertFalse(shouldUseLandscapeForMode(SessionOperatingMode.DISPLAY_HOST))
         assertFalse(shouldUseLandscapeForMode(SessionOperatingMode.SINGLE_DEVICE))
     }
 
