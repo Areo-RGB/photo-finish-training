@@ -28,12 +28,12 @@ class TcpConnectionsManagerTest {
     fun `client can connect and send message to host with configured tcp host`() {
         val port = ServerSocket(0).use { it.localPort }
         val host = TcpConnectionsManager(
-            hostIp = "127.0.0.1",
             hostPort = port,
+            fallbackHostIp = "127.0.0.1",
         )
         val client = TcpConnectionsManager(
-            hostIp = "127.0.0.1",
             hostPort = port,
+            fallbackHostIp = "127.0.0.1",
         )
         val payloadLatch = CountDownLatch(1)
         val clientConnected = CountDownLatch(1)

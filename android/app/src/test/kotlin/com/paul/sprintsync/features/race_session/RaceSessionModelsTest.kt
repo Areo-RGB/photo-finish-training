@@ -55,6 +55,52 @@ class RaceSessionModelsTest {
     }
 
     @Test
+    fun `control command accepts auto ready delay seconds and manual mode`() {
+        val delayedRaw = SessionControlCommandMessage(
+            action = SessionControlAction.SET_AUTO_READY_DELAY,
+            targetEndpointId = "ep-1",
+            senderDeviceName = "Controller",
+            limitMillis = null,
+            sensitivityPercent = null,
+            autoReadyDelaySeconds = 2,
+        ).toJsonString()
+        val delayedParsed = SessionControlCommandMessage.tryParse(delayedRaw)
+
+        assertNotNull(delayedParsed)
+        assertEquals(SessionControlAction.SET_AUTO_READY_DELAY, delayedParsed.action)
+        assertEquals(2, delayedParsed.autoReadyDelaySeconds)
+
+        val manualRaw = SessionControlCommandMessage(
+            action = SessionControlAction.SET_AUTO_READY_DELAY,
+            targetEndpointId = "ep-1",
+            senderDeviceName = "Controller",
+            limitMillis = null,
+            sensitivityPercent = null,
+            autoReadyDelaySeconds = null,
+        ).toJsonString()
+        val manualParsed = SessionControlCommandMessage.tryParse(manualRaw)
+
+        assertNotNull(manualParsed)
+        assertEquals(SessionControlAction.SET_AUTO_READY_DELAY, manualParsed.action)
+        assertEquals(null, manualParsed.autoReadyDelaySeconds)
+    }
+
+    @Test
+    fun `control command rejects invalid auto ready delay seconds`() {
+        val invalid = """
+            {
+              "type": "control_command",
+              "action": "set_auto_ready_delay",
+              "targetEndpointId": "ep-1",
+              "senderDeviceName": "Controller",
+              "autoReadyDelaySeconds": 8
+            }
+        """.trimIndent()
+
+        assertNull(SessionControlCommandMessage.tryParse(invalid))
+    }
+
+    @Test
     fun `control command rejects invalid sensitivity`() {
         val invalid = """
             {

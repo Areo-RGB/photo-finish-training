@@ -541,6 +541,19 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
+    fun `effective auto ready delay defaults to two seconds when unset`() {
+        assertEquals(2, effectiveAutoReadyDelaySeconds(configuredDelaySeconds = null))
+    }
+
+    @Test
+    fun `effective auto ready delay supports manual and validates range`() {
+        assertEquals(null, effectiveAutoReadyDelaySeconds(configuredDelaySeconds = 0))
+        assertEquals(1, effectiveAutoReadyDelaySeconds(configuredDelaySeconds = 1))
+        assertEquals(5, effectiveAutoReadyDelaySeconds(configuredDelaySeconds = 5))
+        assertEquals(2, effectiveAutoReadyDelaySeconds(configuredDelaySeconds = 9))
+    }
+
+    @Test
     fun `little-endian dhcp gateway int converts to ipv4`() {
         assertEquals("10.173.42.224", ipv4FromLittleEndianInt(0xE02AAD0A.toInt()))
         assertEquals(null, ipv4FromLittleEndianInt(0))

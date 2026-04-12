@@ -28,6 +28,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -154,6 +157,7 @@ fun SprintSyncApp(
     onConnectDisplayHost: (String) -> Unit,
     onResetDeviceTimer: (String) -> Unit,
     onSetDisplayLimit: (String, Long) -> Unit,
+    onSetAutoReadyDelay: (String, Int?) -> Unit,
     onSetDeviceSensitivity: (String, Int) -> Unit,
     onSetMonitoringEnabled: (Boolean) -> Unit,
     onStopMonitoring: () -> Unit,
@@ -355,6 +359,7 @@ fun SprintSyncApp(
                                 onConnectDisplayHost = onConnectDisplayHost,
                                 onResetDeviceTimer = onResetDeviceTimer,
                                 onSetDisplayLimit = onSetDisplayLimit,
+                                onSetAutoReadyDelay = onSetAutoReadyDelay,
                                 onSetDeviceSensitivity = onSetDeviceSensitivity,
                                 onResetRun = onResetRun,
                             )
@@ -535,6 +540,7 @@ private fun SingleFlavorConnectingCard(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun MonitoringSummaryCard(
     isHost: Boolean,
     localRole: SessionDeviceRole,
@@ -562,6 +568,7 @@ private fun MonitoringSummaryCard(
     onConnectDisplayHost: (String) -> Unit,
     onResetDeviceTimer: (String) -> Unit,
     onSetDisplayLimit: (String, Long) -> Unit,
+    onSetAutoReadyDelay: (String, Int?) -> Unit,
     onSetDeviceSensitivity: (String, Int) -> Unit,
     onResetRun: () -> Unit,
 ) {
@@ -573,6 +580,9 @@ private fun MonitoringSummaryCard(
     val controllerLimitInputs = remember { mutableStateMapOf<String, String>() }
     val controllerSensitivityInputs = remember { mutableStateMapOf<String, Float>() }
     var globalLimitInput by rememberSaveable { mutableStateOf("") }
+    var globalAutoReadyDelaySeconds by rememberSaveable { mutableStateOf<Int?>(2) }
+    var globalAutoReadyMenuExpanded by remember { mutableStateOf(false) }
+    val globalAutoReadyLabel = globalAutoReadyDelaySeconds?.let { "$it s" } ?: "Manual"
     val controllerTargetDevices = remember(
         setupActionProfile,
         controllerTargetEndpoints,
@@ -726,6 +736,62 @@ private fun MonitoringSummaryCard(
                                             controllerTargetDevices.forEach { device ->
                                                 onSetDisplayLimit(device.id, millis)
                                             }
+                                        }
+                                    },
+                                ) {
+                                    Text("Set All")
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                ExposedDropdownMenuBox(
+                                    expanded = globalAutoReadyMenuExpanded,
+                                    onExpandedChange = { globalAutoReadyMenuExpanded = it },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    OutlinedTextField(
+                                        value = globalAutoReadyLabel,
+                                        onValueChange = { },
+                                        label = { Text("Result -> Ready") },
+                                        readOnly = true,
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = globalAutoReadyMenuExpanded)
+                                        },
+                                        modifier = Modifier
+                                            .menuAnchor()
+                                            .fillMaxWidth()
+                                    )
+                                    DropdownMenu(
+                                        expanded = globalAutoReadyMenuExpanded,
+                                        onDismissRequest = { globalAutoReadyMenuExpanded = false },
+                                    ) {
+                                        listOf(1, 2, 3, 4, 5).forEach { seconds ->
+                                            DropdownMenuItem(
+                                                text = { Text("$seconds s") },
+                                                onClick = {
+                                                    globalAutoReadyDelaySeconds = seconds
+                                                    globalAutoReadyMenuExpanded = false
+                                                },
+                                            )
+                                        }
+                                        DropdownMenuItem(
+                                            text = { Text("Manual") },
+                                            onClick = {
+                                                globalAutoReadyDelaySeconds = null
+                                                globalAutoReadyMenuExpanded = false
+                                            },
+                                        )
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        controllerTargetDevices.forEach { device ->
+                                            onSetAutoReadyDelay(device.id, globalAutoReadyDelaySeconds)
                                         }
                                     },
                                 ) {

@@ -108,6 +108,7 @@ enum class SessionControlAction {
     RESET_TIMER,
     SET_DISPLAY_LIMIT,
     SET_MOTION_SENSITIVITY,
+    SET_AUTO_READY_DELAY,
 }
 
 data class SessionControlCommandMessage(
@@ -116,6 +117,7 @@ data class SessionControlCommandMessage(
     val senderDeviceName: String,
     val limitMillis: Long?,
     val sensitivityPercent: Int?,
+    val autoReadyDelaySeconds: Int? = null,
 ) {
     fun toJsonString(): String {
         return JSONObject()
@@ -125,6 +127,7 @@ data class SessionControlCommandMessage(
             .put("senderDeviceName", senderDeviceName)
             .put("limitMillis", limitMillis ?: JSONObject.NULL)
             .put("sensitivityPercent", sensitivityPercent ?: JSONObject.NULL)
+            .put("autoReadyDelaySeconds", autoReadyDelaySeconds ?: JSONObject.NULL)
             .toString()
     }
 
@@ -146,6 +149,7 @@ data class SessionControlCommandMessage(
             val limitMillis = decoded.readOptionalLong("limitMillis")
                 ?: decoded.readOptionalLong("limitSeconds")?.times(1_000L)
             val sensitivityPercent = decoded.readOptionalInt("sensitivityPercent")
+            val autoReadyDelaySeconds = decoded.readOptionalInt("autoReadyDelaySeconds")
             if (targetEndpointId.isEmpty() || senderDeviceName.isEmpty()) {
                 return null
             }
@@ -158,12 +162,19 @@ data class SessionControlCommandMessage(
             ) {
                 return null
             }
+            if (
+                action == SessionControlAction.SET_AUTO_READY_DELAY &&
+                (autoReadyDelaySeconds != null && autoReadyDelaySeconds !in 1..5)
+            ) {
+                return null
+            }
             return SessionControlCommandMessage(
                 action = action,
                 targetEndpointId = targetEndpointId,
                 senderDeviceName = senderDeviceName,
                 limitMillis = limitMillis,
                 sensitivityPercent = sensitivityPercent,
+                autoReadyDelaySeconds = autoReadyDelaySeconds,
             )
         }
     }

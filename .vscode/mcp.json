@@ -1,14 +1,9 @@
 {
   "servers": {
-    "mcp-router": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@mcp_router/cli@latest",
-        "connect"
-      ],
-      "env": {
-        "MCPR_TOKEN": "mcpr_TahMkjnD5RCRbrliBlpq4eiYQSlGZZQF"
+    "mcphub": {
+      "url": "http://localhost:3000/mcp/b796d764-5d19-4c9a-9b22-81128494df21",
+      "headers": {
+        "Authorization": "Bearer <your-access-token>"
       }
     }
   }

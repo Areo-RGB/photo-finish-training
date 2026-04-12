@@ -16,11 +16,14 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class TcpConnectionsManager(
-    private val hostIp: String,
     private val hostPort: Int,
+    private val nsdDiscovery: NsdServiceDiscovery? = null,
+    private val resolveGatewayIp: (() -> String?)? = null,
+    private val fallbackHostIp: String? = null,
 ) : SessionConnectionsManager {
     companion object {
         private const val FRAME_KIND_MESSAGE: Byte = 1
+        private const val DISCOVERY_FALLBACK_TIMEOUT_MS = 1_500L
     }
 
     private val ioExecutor = Executors.newCachedThreadPool()
@@ -28,6 +31,8 @@ class TcpConnectionsManager(
     private val connectedSockets = ConcurrentHashMap<String, Socket>()
     private val endpointNamesById = ConcurrentHashMap<String, String>()
     private val discoveryRunning = AtomicBoolean(false)
+    private val discoveryFallbackConsumed = AtomicBoolean(false)
+    private var discoveryFallbackRunnable: Runnable? = null
 
     @Volatile
     private var eventListener: ((NearbyEvent) -> Unit)? = null
@@ -63,6 +68,11 @@ class TcpConnectionsManager(
         try {
             val socket = ServerSocket(hostPort)
             serverSocket = socket
+            nsdDiscovery?.registerService(endpointName, hostPort) { result ->
+                result.exceptionOrNull()?.let { error ->
+                    emitError("NSD registration failed: ${error.localizedMessage ?: "unknown"}")
+                }
+            }
             ioExecutor.execute {
                 while (!socket.isClosed) {
                     try {
@@ -120,14 +130,75 @@ class TcpConnectionsManager(
         activeRole = NearbyRole.CLIENT
         activeStrategy = strategy
         discoveryRunning.set(true)
-        emitEvent(
-            NearbyEvent.EndpointFound(
-                endpointId = hostIp,
-                endpointName = hostIp,
-                serviceId = serviceId,
-            ),
-        )
+        discoveryFallbackConsumed.set(false)
+        scheduleGatewayFallback(serviceId)
+        if (nsdDiscovery != null) {
+            nsdDiscovery.discoverServices(
+                onServiceFound = { hostAddress, _, serviceName ->
+                    try {
+                        if (!discoveryRunning.get()) {
+                            return@discoverServices
+                        }
+                        discoveryFallbackConsumed.set(true)
+                        cancelDiscoveryFallback()
+                        emitEvent(
+                            NearbyEvent.EndpointFound(
+                                endpointId = hostAddress,
+                                endpointName = serviceName,
+                                serviceId = serviceId,
+                            ),
+                        )
+                    } catch (error: Throwable) {
+                        emitError("NSD discovery callback failed: ${error.localizedMessage ?: "unknown"}")
+                    }
+                },
+                onError = { errorMsg ->
+                    emitError("NSD discovery failed: $errorMsg")
+                    emitGatewayFallbackEndpoint(serviceId)
+                },
+            )
+        } else {
+            emitGatewayFallbackEndpoint(serviceId)
+        }
         onComplete(Result.success(Unit))
+    }
+
+    private fun scheduleGatewayFallback(serviceId: String) {
+        cancelDiscoveryFallback()
+        val fallbackRunnable = Runnable {
+            emitGatewayFallbackEndpoint(serviceId)
+        }
+        discoveryFallbackRunnable = fallbackRunnable
+        mainHandler.postDelayed(fallbackRunnable, DISCOVERY_FALLBACK_TIMEOUT_MS)
+    }
+
+    private fun cancelDiscoveryFallback() {
+        val runnable = discoveryFallbackRunnable ?: return
+        mainHandler.removeCallbacks(runnable)
+        discoveryFallbackRunnable = null
+    }
+
+    private fun emitGatewayFallbackEndpoint(serviceId: String) {
+        if (!discoveryRunning.get()) {
+            return
+        }
+        if (!discoveryFallbackConsumed.compareAndSet(false, true)) {
+            return
+        }
+        cancelDiscoveryFallback()
+        val gatewayIp = resolveGatewayIp?.invoke()?.takeIf { it.isNotBlank() }
+        val resolvedIp = gatewayIp ?: fallbackHostIp?.takeIf { it.isNotBlank() }
+        if (resolvedIp != null) {
+            emitEvent(
+                NearbyEvent.EndpointFound(
+                    endpointId = resolvedIp,
+                    endpointName = resolvedIp,
+                    serviceId = serviceId,
+                ),
+            )
+        } else {
+            emitEvent(NearbyEvent.Error("No host IP: NSD unavailable, DHCP gateway null, no fallback"))
+        }
     }
 
     override fun requestConnection(endpointId: String, endpointName: String, onComplete: (Result<Unit>) -> Unit) {
@@ -135,7 +206,9 @@ class TcpConnectionsManager(
             onComplete(Result.failure(IllegalStateException("requestConnection ignored: not in client mode.")))
             return
         }
-        val targetHost = endpointId.substringBefore(":").ifBlank { hostIp }
+        val targetHost = endpointId.substringBefore(":").ifBlank {
+            resolveGatewayIp?.invoke() ?: fallbackHostIp ?: "127.0.0.1"
+        }
         ioExecutor.execute {
             try {
                 val socket = Socket(targetHost, hostPort)
@@ -147,6 +220,7 @@ class TcpConnectionsManager(
                 }
                 endpointNamesById[connectedId] = endpointId
                 discoveryRunning.set(false)
+                cancelDiscoveryFallback()
                 emitEvent(
                     NearbyEvent.ConnectionResult(
                         endpointId = connectedId,
@@ -238,6 +312,8 @@ class TcpConnectionsManager(
 
     override fun stopAll() {
         discoveryRunning.set(false)
+        cancelDiscoveryFallback()
+        nsdDiscovery?.stopAll()
         serverSocket?.close()
         serverSocket = null
         connectedSockets.forEach { (_, socket) ->

@@ -25,6 +25,8 @@ import com.paul.sprintsync.core.services.NearbyEvent
 import com.paul.sprintsync.core.services.NearbyTransportStrategy
 import com.paul.sprintsync.core.services.SessionConnectionsManager
 import com.paul.sprintsync.core.services.TcpConnectionsManager
+import com.paul.sprintsync.core.services.GatewayResolver
+import com.paul.sprintsync.core.services.NsdServiceDiscovery
 import com.paul.sprintsync.core.DeviceDetector
 import com.paul.sprintsync.core.RuntimeDeviceConfig
 import com.paul.sprintsync.core.RuntimeNetworkRole
@@ -57,6 +59,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         private const val TIMER_REFRESH_INTERVAL_MS = 100L
         private const val TAG = "SprintSyncRuntime"
         private const val MAX_PENDING_LAPS = 100
+        private const val MANUAL_AUTO_READY_DELAY_SECONDS = 0
         private const val GPS_LOCK_VALIDITY_NANOS = 10_000_000_000L
         private const val GPS_REACQUIRE_REQUEST_THROTTLE_NANOS = 5_000_000_000L
         private const val TARGET_MONITORING_WIFI_SSID = "TP-Link_86CA_5G"
@@ -82,6 +85,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private val displayHostDeviceNamesByEndpointId = linkedMapOf<String, String>()
     private val displayLatestLapByEndpointId = linkedMapOf<String, Long>()
     private val displayLimitMillisByEndpointId = linkedMapOf<String, Long>()
+    private val displayAutoReadyDelaySecondsByEndpointId = linkedMapOf<String, Int>()
+    private val displayAutoReadyResetJobsByEndpointId = linkedMapOf<String, Job>()
     private var lastRelayedStopSensorNanos: Long? = null
     private var displayReconnectionPending: Boolean = false
     private var lastGpsReacquireRequestElapsedNanos: Long? = null
@@ -102,9 +107,12 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         sensorNativeController = SensorNativeController(this)
         val localRepository = LocalRepository(this)
+        val nsdDiscovery = NsdServiceDiscovery(this)
         connectionsManager = TcpConnectionsManager(
-            hostIp = BuildConfig.TCP_HOST_IP,
             hostPort = BuildConfig.TCP_HOST_PORT,
+            nsdDiscovery = nsdDiscovery,
+            resolveGatewayIp = { GatewayResolver.resolveGatewayIp(this) },
+            fallbackHostIp = BuildConfig.TCP_HOST_IP,
         )
         motionDetectionController = MotionDetectionController(
             localRepository = localRepository,
@@ -188,6 +196,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             targetEndpointId = targetEndpointId,
                             limitMillis = null,
                             sensitivityPercent = null,
+                            autoReadyDelaySeconds = null,
                         )
                     },
                     onSetDisplayLimit = { targetEndpointId, limitMillis ->
@@ -196,6 +205,16 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             targetEndpointId = targetEndpointId,
                             limitMillis = limitMillis,
                             sensitivityPercent = null,
+                            autoReadyDelaySeconds = null,
+                        )
+                    },
+                    onSetAutoReadyDelay = { targetEndpointId, autoReadyDelaySeconds ->
+                        sendControllerCommandToDisplayHost(
+                            action = SessionControlAction.SET_AUTO_READY_DELAY,
+                            targetEndpointId = targetEndpointId,
+                            limitMillis = null,
+                            sensitivityPercent = null,
+                            autoReadyDelaySeconds = autoReadyDelaySeconds,
                         )
                     },
                     onSetDeviceSensitivity = { targetEndpointId, sensitivityPercent ->
@@ -204,6 +223,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             targetEndpointId = targetEndpointId,
                             limitMillis = null,
                             sensitivityPercent = sensitivityPercent,
+                            autoReadyDelaySeconds = null,
                         )
                     },
                     onSetMonitoringEnabled = { enabled ->
@@ -331,6 +351,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         stopTimerRefreshLoop()
         stopAutoDisplayReconnectLoop()
+        cancelAllDisplayAutoReadyResets()
         connectionsManager.stopAll()
         connectionsManager.setEventListener(null)
         sensorNativeController.setEventListener(null)
@@ -631,6 +652,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                     }
                                 }
                                 SessionControlAction.SET_DISPLAY_LIMIT -> Unit
+                                SessionControlAction.SET_AUTO_READY_DELAY -> Unit
                             }
                         }
                         SessionControllerTargetsMessage.tryParse(event.message)?.let { snapshot ->
@@ -682,6 +704,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         displayControllerEndpointIds.remove(event.endpointId)
                         displayLatestLapByEndpointId.remove(event.endpointId)
                         displayLimitMillisByEndpointId.remove(event.endpointId)
+                        displayAutoReadyDelaySecondsByEndpointId.remove(event.endpointId)
+                        cancelDisplayAutoReadyReset(event.endpointId)
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
                     }
                     is NearbyEvent.PayloadReceived -> {
@@ -700,6 +724,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             handledControl = true
                             when (command.action) {
                                 SessionControlAction.RESET_TIMER -> {
+                                    cancelDisplayAutoReadyReset(command.targetEndpointId)
                                     displayLatestLapByEndpointId.remove(command.targetEndpointId)
                                     if (connectionsManager.connectedEndpoints().contains(command.targetEndpointId)) {
                                         connectionsManager.sendMessage(command.targetEndpointId, command.toJsonString()) { result ->
@@ -718,6 +743,12 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                     } else {
                                         displayLimitMillisByEndpointId.remove(command.targetEndpointId)
                                     }
+                                }
+                                SessionControlAction.SET_AUTO_READY_DELAY -> {
+                                    val configuredDelaySeconds = command.autoReadyDelaySeconds
+                                    displayAutoReadyDelaySecondsByEndpointId[command.targetEndpointId] =
+                                        configuredDelaySeconds ?: MANUAL_AUTO_READY_DELAY_SECONDS
+                                    cancelDisplayAutoReadyReset(command.targetEndpointId)
                                 }
                                 SessionControlAction.SET_MOTION_SENSITIVITY -> {
                                     val sensitivityPercent = command.sensitivityPercent
@@ -744,6 +775,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                     displayHostDeviceNamesByEndpointId[event.endpointId] = senderDeviceName
                                 }
                                 displayLatestLapByEndpointId[event.endpointId] = result.elapsedNanos
+                                scheduleDisplayAutoReadyReset(event.endpointId)
                             }
                         }
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
@@ -1060,7 +1092,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                 localRole = localRole,
                 monitoringConnectionTypeLabel = resolveMonitoringConnectionTypeLabel(
                     hasPeers = hasPeers,
-                    hostIp = BuildConfig.TCP_HOST_IP,
+                    hostIp = displayConnectedHostEndpointId ?: BuildConfig.TCP_HOST_IP,
                     hostPort = BuildConfig.TCP_HOST_PORT,
                 ),
                 monitoringSyncModeLabel = monitoringSyncMode,
@@ -1285,6 +1317,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         targetEndpointId: String,
         limitMillis: Long?,
         sensitivityPercent: Int?,
+        autoReadyDelaySeconds: Int?,
     ) {
         val hostEndpoint = displayConnectedHostEndpointId
         if (hostEndpoint.isNullOrBlank()) {
@@ -1297,6 +1330,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             senderDeviceName = localEndpointName(),
             limitMillis = limitMillis,
             sensitivityPercent = sensitivityPercent,
+            autoReadyDelaySeconds = autoReadyDelaySeconds,
         ).toJsonString()
         connectionsManager.sendMessage(hostEndpoint, payload) { result ->
             result.exceptionOrNull()?.let { error ->
@@ -1346,16 +1380,67 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         }
     }
 
+    private fun scheduleDisplayAutoReadyReset(endpointId: String) {
+        cancelDisplayAutoReadyReset(endpointId)
+        val configuredDelaySeconds = displayAutoReadyDelaySecondsByEndpointId[endpointId]
+        val effectiveDelaySeconds = effectiveAutoReadyDelaySeconds(configuredDelaySeconds)
+            ?: return
+        val delayMillis = effectiveDelaySeconds * 1_000L
+        val job = lifecycleScope.launch {
+            try {
+                delay(delayMillis)
+                if (raceSessionController.uiState.value.operatingMode != SessionOperatingMode.DISPLAY_HOST) {
+                    return@launch
+                }
+                if (!connectionsManager.connectedEndpoints().contains(endpointId)) {
+                    return@launch
+                }
+                displayLatestLapByEndpointId.remove(endpointId)
+                val resetPayload = SessionControlCommandMessage(
+                    action = SessionControlAction.RESET_TIMER,
+                    targetEndpointId = endpointId,
+                    senderDeviceName = localEndpointName(),
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                ).toJsonString()
+                connectionsManager.sendMessage(endpointId, resetPayload) { result ->
+                    result.exceptionOrNull()?.let { error ->
+                        appendEvent("auto ready reset error: ${error.localizedMessage ?: "unknown"}")
+                    }
+                }
+                broadcastControllerTargetsSnapshotToConnectedEndpoints()
+                syncControllerSummaries()
+            } finally {
+                displayAutoReadyResetJobsByEndpointId.remove(endpointId)
+            }
+        }
+        displayAutoReadyResetJobsByEndpointId[endpointId] = job
+    }
+
+    private fun cancelDisplayAutoReadyReset(endpointId: String) {
+        displayAutoReadyResetJobsByEndpointId.remove(endpointId)?.cancel()
+    }
+
+    private fun cancelAllDisplayAutoReadyResets() {
+        displayAutoReadyResetJobsByEndpointId.values.forEach { job ->
+            job.cancel()
+        }
+        displayAutoReadyResetJobsByEndpointId.clear()
+    }
+
     private fun clearDisplayRelayReconnectionState() {
         displayReconnectionPending = false
         pendingLapResults.clear()
     }
 
     private fun clearDisplayHostLapState() {
+        cancelAllDisplayAutoReadyResets()
         displayControllerEndpointIds.clear()
         displayHostDeviceNamesByEndpointId.clear()
         displayLatestLapByEndpointId.clear()
         displayLimitMillisByEndpointId.clear()
+        displayAutoReadyDelaySecondsByEndpointId.clear()
     }
 
     private fun logRuntimeDiagnostic(message: String) {
@@ -1422,6 +1507,15 @@ internal fun reconnectDelayMillis(attempt: Int): Long {
     val clamped = attempt.coerceAtLeast(0).coerceAtMost(6)
     val delay = 500L shl clamped
     return delay.coerceAtMost(5_000L)
+}
+
+internal fun effectiveAutoReadyDelaySeconds(configuredDelaySeconds: Int?): Int? {
+    return when {
+        configuredDelaySeconds == null -> 2
+        configuredDelaySeconds == 0 -> null
+        configuredDelaySeconds in 1..5 -> configuredDelaySeconds
+        else -> 2
+    }
 }
 
 internal fun ipv4FromLittleEndianInt(value: Int): String? {
