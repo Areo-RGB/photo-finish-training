@@ -104,11 +104,43 @@ data class SessionLapResultMessage(
     }
 }
 
+data class SessionLapStartedMessage(
+    val senderDeviceName: String,
+) {
+    fun toJsonString(): String {
+        return JSONObject()
+            .put("type", TYPE)
+            .put("senderDeviceName", senderDeviceName)
+            .toString()
+    }
+
+    companion object {
+        const val TYPE = "lap_started"
+
+        fun tryParse(raw: String): SessionLapStartedMessage? {
+            val decoded = try {
+                JSONObject(raw)
+            } catch (_: JSONException) {
+                return null
+            }
+            if (decoded.optString("type") != TYPE) {
+                return null
+            }
+            val senderDeviceName = decoded.optString("senderDeviceName", "").trim()
+            if (senderDeviceName.isEmpty()) {
+                return null
+            }
+            return SessionLapStartedMessage(senderDeviceName = senderDeviceName)
+        }
+    }
+}
+
 enum class SessionControlAction {
     RESET_TIMER,
     SET_DISPLAY_LIMIT,
     SET_MOTION_SENSITIVITY,
     SET_AUTO_READY_DELAY,
+    SET_WAIT_TEXT_MODE,
 }
 
 data class SessionControlCommandMessage(
@@ -118,6 +150,7 @@ data class SessionControlCommandMessage(
     val limitMillis: Long?,
     val sensitivityPercent: Int?,
     val autoReadyDelaySeconds: Int? = null,
+    val waitTextEnabled: Boolean? = null,
 ) {
     fun toJsonString(): String {
         return JSONObject()
@@ -128,6 +161,7 @@ data class SessionControlCommandMessage(
             .put("limitMillis", limitMillis ?: JSONObject.NULL)
             .put("sensitivityPercent", sensitivityPercent ?: JSONObject.NULL)
             .put("autoReadyDelaySeconds", autoReadyDelaySeconds ?: JSONObject.NULL)
+                .put("waitTextEnabled", waitTextEnabled ?: JSONObject.NULL)
             .toString()
     }
 
@@ -150,6 +184,11 @@ data class SessionControlCommandMessage(
                 ?: decoded.readOptionalLong("limitSeconds")?.times(1_000L)
             val sensitivityPercent = decoded.readOptionalInt("sensitivityPercent")
             val autoReadyDelaySeconds = decoded.readOptionalInt("autoReadyDelaySeconds")
+            val waitTextEnabled = if (decoded.has("waitTextEnabled") && !decoded.isNull("waitTextEnabled")) {
+                decoded.optBoolean("waitTextEnabled")
+            } else {
+                null
+            }
             if (targetEndpointId.isEmpty() || senderDeviceName.isEmpty()) {
                 return null
             }
@@ -168,6 +207,9 @@ data class SessionControlCommandMessage(
             ) {
                 return null
             }
+            if (action == SessionControlAction.SET_WAIT_TEXT_MODE && waitTextEnabled == null) {
+                return null
+            }
             return SessionControlCommandMessage(
                 action = action,
                 targetEndpointId = targetEndpointId,
@@ -175,6 +217,7 @@ data class SessionControlCommandMessage(
                 limitMillis = limitMillis,
                 sensitivityPercent = sensitivityPercent,
                 autoReadyDelaySeconds = autoReadyDelaySeconds,
+                waitTextEnabled = waitTextEnabled,
             )
         }
     }

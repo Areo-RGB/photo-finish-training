@@ -1,5 +1,10 @@
 package com.paul.sprintsync
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -51,6 +56,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -140,6 +146,7 @@ data class DisplayLapRow(
     val limitLabel: String? = null,
     val isOverLimit: Boolean = false,
     val isUnderLimit: Boolean = false,
+    val isWaiting: Boolean = false,
 )
 
 @Composable
@@ -158,6 +165,7 @@ fun SprintSyncApp(
     onResetDeviceTimer: (String) -> Unit,
     onSetDisplayLimit: (String, Long) -> Unit,
     onSetAutoReadyDelay: (String, Int?) -> Unit,
+    onSetWaitTextEnabled: (String, Boolean) -> Unit,
     onSetDeviceSensitivity: (String, Int) -> Unit,
     onSetMonitoringEnabled: (Boolean) -> Unit,
     onStopMonitoring: () -> Unit,
@@ -360,6 +368,7 @@ fun SprintSyncApp(
                                 onResetDeviceTimer = onResetDeviceTimer,
                                 onSetDisplayLimit = onSetDisplayLimit,
                                 onSetAutoReadyDelay = onSetAutoReadyDelay,
+                                onSetWaitTextEnabled = onSetWaitTextEnabled,
                                 onSetDeviceSensitivity = onSetDeviceSensitivity,
                                 onResetRun = onResetRun,
                             )
@@ -569,6 +578,7 @@ private fun MonitoringSummaryCard(
     onResetDeviceTimer: (String) -> Unit,
     onSetDisplayLimit: (String, Long) -> Unit,
     onSetAutoReadyDelay: (String, Int?) -> Unit,
+    onSetWaitTextEnabled: (String, Boolean) -> Unit,
     onSetDeviceSensitivity: (String, Int) -> Unit,
     onResetRun: () -> Unit,
 ) {
@@ -582,6 +592,7 @@ private fun MonitoringSummaryCard(
     var globalLimitInput by rememberSaveable { mutableStateOf("") }
     var globalAutoReadyDelaySeconds by rememberSaveable { mutableStateOf<Int?>(2) }
     var globalAutoReadyMenuExpanded by remember { mutableStateOf(false) }
+    var globalWaitTextEnabled by rememberSaveable { mutableStateOf(true) }
     val globalAutoReadyLabel = globalAutoReadyDelaySeconds?.let { "$it s" } ?: "Manual"
     val controllerTargetDevices = remember(
         setupActionProfile,
@@ -792,6 +803,38 @@ private fun MonitoringSummaryCard(
                                     onClick = {
                                         controllerTargetDevices.forEach { device ->
                                             onSetAutoReadyDelay(device.id, globalAutoReadyDelaySeconds)
+                                        }
+                                    },
+                                ) {
+                                    Text("Set All")
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "Show WAIT Text",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Switch(
+                                        checked = globalWaitTextEnabled,
+                                        onCheckedChange = { checked ->
+                                            globalWaitTextEnabled = checked
+                                        },
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        controllerTargetDevices.forEach { device ->
+                                            onSetWaitTextEnabled(device.id, globalWaitTextEnabled)
                                         }
                                     },
                                 ) {
@@ -1383,6 +1426,17 @@ private fun DisplayResultPanel(
         else -> defaultCardBackground
     }
     val foregroundColor = if (row.isOverLimit || row.isUnderLimit) Color.White else defaultDeviceColor
+    val waitPulseTransition = rememberInfiniteTransition(label = "waitPulse")
+    val waitPulseAlpha by waitPulseTransition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 850),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "waitPulseAlpha",
+    )
+    val lapTextAlpha = if (row.isWaiting) waitPulseAlpha else 1f
     Box(
         modifier = Modifier
             .width(cardWidth)
@@ -1422,6 +1476,7 @@ private fun DisplayResultPanel(
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 softWrap = false,
+                modifier = Modifier.alpha(lapTextAlpha),
             )
             row.limitLabel?.let { label ->
                 Spacer(modifier = Modifier.height(2.dp))

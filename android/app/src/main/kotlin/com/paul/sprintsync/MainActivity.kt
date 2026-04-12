@@ -40,6 +40,7 @@ import com.paul.sprintsync.features.race_session.SessionControllerIdentityMessag
 import com.paul.sprintsync.features.race_session.SessionControllerTarget
 import com.paul.sprintsync.features.race_session.SessionControllerTargetsMessage
 import com.paul.sprintsync.features.race_session.SessionDeviceRole
+import com.paul.sprintsync.features.race_session.SessionLapStartedMessage
 import com.paul.sprintsync.features.race_session.SessionLapResultMessage
 import com.paul.sprintsync.features.race_session.SessionNetworkRole
 import com.paul.sprintsync.features.race_session.SessionOperatingMode
@@ -84,12 +85,17 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private val displayControllerEndpointIds = linkedSetOf<String>()
     private val displayHostDeviceNamesByEndpointId = linkedMapOf<String, String>()
     private val displayLatestLapByEndpointId = linkedMapOf<String, Long>()
+    private val displayWaitingEndpointIds = linkedSetOf<String>()
+    private val displayWaitingStartElapsedRealtimeNanosByEndpointId = linkedMapOf<String, Long>()
+    private val displayWaitTextEnabledByEndpointId = linkedMapOf<String, Boolean>()
     private val displayLimitMillisByEndpointId = linkedMapOf<String, Long>()
     private val displayAutoReadyDelaySecondsByEndpointId = linkedMapOf<String, Int>()
     private val displayAutoReadyResetJobsByEndpointId = linkedMapOf<String, Job>()
+    private var lastRelayedStartSensorNanos: Long? = null
     private var lastRelayedStopSensorNanos: Long? = null
     private var displayReconnectionPending: Boolean = false
     private var lastGpsReacquireRequestElapsedNanos: Long? = null
+    private val pendingLapStartedMessages = ArrayDeque<SessionLapStartedMessage>()
     private val pendingLapResults = ArrayDeque<SessionLapResultMessage>()
     private var pendingPermissionScope: PermissionScope = PermissionScope.NETWORK_ONLY
     private var autoDisplayReconnectJob: Job? = null
@@ -197,6 +203,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             limitMillis = null,
                             sensitivityPercent = null,
                             autoReadyDelaySeconds = null,
+                            waitTextEnabled = null,
                         )
                     },
                     onSetDisplayLimit = { targetEndpointId, limitMillis ->
@@ -206,6 +213,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             limitMillis = limitMillis,
                             sensitivityPercent = null,
                             autoReadyDelaySeconds = null,
+                            waitTextEnabled = null,
                         )
                     },
                     onSetAutoReadyDelay = { targetEndpointId, autoReadyDelaySeconds ->
@@ -215,6 +223,17 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             limitMillis = null,
                             sensitivityPercent = null,
                             autoReadyDelaySeconds = autoReadyDelaySeconds,
+                            waitTextEnabled = null,
+                        )
+                    },
+                    onSetWaitTextEnabled = { targetEndpointId, enabled ->
+                        sendControllerCommandToDisplayHost(
+                            action = SessionControlAction.SET_WAIT_TEXT_MODE,
+                            targetEndpointId = targetEndpointId,
+                            limitMillis = null,
+                            sensitivityPercent = null,
+                            autoReadyDelaySeconds = null,
+                            waitTextEnabled = enabled,
                         )
                     },
                     onSetDeviceSensitivity = { targetEndpointId, sensitivityPercent ->
@@ -224,6 +243,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             limitMillis = null,
                             sensitivityPercent = sensitivityPercent,
                             autoReadyDelaySeconds = null,
+                            waitTextEnabled = null,
                         )
                     },
                     onSetMonitoringEnabled = { enabled ->
@@ -432,6 +452,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             displayConnectedHostName = null
             displayDiscoveredHosts.clear()
             controllerTargetDeviceNamesByEndpointId.clear()
+            lastRelayedStartSensorNanos = null
             lastRelayedStopSensorNanos = null
             raceSessionController.startSingleDeviceMonitoring()
             userMonitoringEnabled = true
@@ -653,6 +674,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                 }
                                 SessionControlAction.SET_DISPLAY_LIMIT -> Unit
                                 SessionControlAction.SET_AUTO_READY_DELAY -> Unit
+                                SessionControlAction.SET_WAIT_TEXT_MODE -> Unit
                             }
                         }
                         SessionControllerTargetsMessage.tryParse(event.message)?.let { snapshot ->
@@ -682,6 +704,9 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         displayHostDeviceNamesByEndpointId.remove(event.endpointId)
                         displayControllerEndpointIds.remove(event.endpointId)
                         displayLatestLapByEndpointId.remove(event.endpointId)
+                        displayWaitingEndpointIds.remove(event.endpointId)
+                        displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(event.endpointId)
+                        displayWaitTextEnabledByEndpointId.remove(event.endpointId)
                         displayLimitMillisByEndpointId.remove(event.endpointId)
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
                     }
@@ -695,6 +720,9 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             displayHostDeviceNamesByEndpointId.remove(event.endpointId)
                             displayControllerEndpointIds.remove(event.endpointId)
                             displayLatestLapByEndpointId.remove(event.endpointId)
+                            displayWaitingEndpointIds.remove(event.endpointId)
+                            displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(event.endpointId)
+                            displayWaitTextEnabledByEndpointId.remove(event.endpointId)
                             displayLimitMillisByEndpointId.remove(event.endpointId)
                         }
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
@@ -703,6 +731,9 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         displayHostDeviceNamesByEndpointId.remove(event.endpointId)
                         displayControllerEndpointIds.remove(event.endpointId)
                         displayLatestLapByEndpointId.remove(event.endpointId)
+                        displayWaitingEndpointIds.remove(event.endpointId)
+                        displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(event.endpointId)
+                        displayWaitTextEnabledByEndpointId.remove(event.endpointId)
                         displayLimitMillisByEndpointId.remove(event.endpointId)
                         displayAutoReadyDelaySecondsByEndpointId.remove(event.endpointId)
                         cancelDisplayAutoReadyReset(event.endpointId)
@@ -726,6 +757,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                 SessionControlAction.RESET_TIMER -> {
                                     cancelDisplayAutoReadyReset(command.targetEndpointId)
                                     displayLatestLapByEndpointId.remove(command.targetEndpointId)
+                                    displayWaitingEndpointIds.remove(command.targetEndpointId)
+                                    displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(command.targetEndpointId)
                                     if (connectionsManager.connectedEndpoints().contains(command.targetEndpointId)) {
                                         connectionsManager.sendMessage(command.targetEndpointId, command.toJsonString()) { result ->
                                             result.exceptionOrNull()?.let { error ->
@@ -750,6 +783,12 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                         configuredDelaySeconds ?: MANUAL_AUTO_READY_DELAY_SECONDS
                                     cancelDisplayAutoReadyReset(command.targetEndpointId)
                                 }
+                                SessionControlAction.SET_WAIT_TEXT_MODE -> {
+                                    val waitTextEnabled = command.waitTextEnabled
+                                    if (waitTextEnabled != null) {
+                                        displayWaitTextEnabledByEndpointId[command.targetEndpointId] = waitTextEnabled
+                                    }
+                                }
                                 SessionControlAction.SET_MOTION_SENSITIVITY -> {
                                     val sensitivityPercent = command.sensitivityPercent
                                     if (
@@ -769,13 +808,30 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         }
                         }
                         if (!handledControllerIdentity && !handledControl) {
-                            SessionLapResultMessage.tryParse(event.message)?.let { result ->
-                                val senderDeviceName = result.senderDeviceName.trim()
+                            var handledLapStarted = false
+                            SessionLapStartedMessage.tryParse(event.message)?.let { started ->
+                                handledLapStarted = true
+                                val senderDeviceName = started.senderDeviceName.trim()
                                 if (senderDeviceName.isNotEmpty()) {
                                     displayHostDeviceNamesByEndpointId[event.endpointId] = senderDeviceName
                                 }
-                                displayLatestLapByEndpointId[event.endpointId] = result.elapsedNanos
-                                scheduleDisplayAutoReadyReset(event.endpointId)
+                                displayLatestLapByEndpointId.remove(event.endpointId)
+                                displayWaitingEndpointIds.add(event.endpointId)
+                                displayWaitingStartElapsedRealtimeNanosByEndpointId[event.endpointId] =
+                                    SystemClock.elapsedRealtimeNanos()
+                                cancelDisplayAutoReadyReset(event.endpointId)
+                            }
+                            if (!handledLapStarted) {
+                                SessionLapResultMessage.tryParse(event.message)?.let { result ->
+                                    val senderDeviceName = result.senderDeviceName.trim()
+                                    if (senderDeviceName.isNotEmpty()) {
+                                        displayHostDeviceNamesByEndpointId[event.endpointId] = senderDeviceName
+                                    }
+                                    displayWaitingEndpointIds.remove(event.endpointId)
+                                    displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(event.endpointId)
+                                    displayLatestLapByEndpointId[event.endpointId] = result.elapsedNanos
+                                    scheduleDisplayAutoReadyReset(event.endpointId)
+                                }
                             }
                         }
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
@@ -932,6 +988,14 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             LocalCaptureAction.NONE -> Unit
         }
 
+        val hasDisplayLocalWaitingTimers =
+            mode == SessionOperatingMode.DISPLAY_HOST &&
+                displayWaitingEndpointIds.any { endpointId ->
+                    displayLatestLapByEndpointId[endpointId] == null &&
+                        displayWaitTextEnabledByEndpointId[endpointId] == false &&
+                        displayWaitingStartElapsedRealtimeNanosByEndpointId[endpointId] != null
+                }
+
         if (
             shouldKeepTimerRefreshActive(
                 monitoringActive = raceState.monitoringActive &&
@@ -939,7 +1003,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     !isPassiveDisplayClient,
                 isAppResumed = isAppResumed,
                 hasStopSensor = raceState.timeline.hostStopSensorNanos != null,
-            )
+            ) || hasDisplayLocalWaitingTimers
         ) {
             startTimerRefreshLoop()
         } else {
@@ -970,16 +1034,37 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             raceState.timeline
         }
         if (mode == SessionOperatingMode.SINGLE_DEVICE) {
+            val activeStartNanos = raceState.timeline.hostStartSensorNanos
             val completed = raceState.latestCompletedTimeline
-            val stopNanos = completed?.hostStopSensorNanos
-            val startNanos = completed?.hostStartSensorNanos
+            val completedStopNanos = completed?.hostStopSensorNanos
+            val completedStartNanos = completed?.hostStartSensorNanos
             val hostEndpoint = displayConnectedHostEndpointId
+            if (activeStartNanos != null && activeStartNanos != lastRelayedStartSensorNanos) {
+                val startedMessage = SessionLapStartedMessage(
+                    senderDeviceName = localEndpointName(),
+                )
+
+                if (hostEndpoint != null) {
+                    connectionsManager.sendMessage(hostEndpoint, startedMessage.toJsonString()) { result ->
+                        result.exceptionOrNull()?.let { error ->
+                            appendEvent("lap start relay error: ${error.localizedMessage ?: "unknown"}")
+                        }
+                    }
+                    lastRelayedStartSensorNanos = activeStartNanos
+                } else if (displayReconnectionPending) {
+                    if (pendingLapStartedMessages.size >= MAX_PENDING_LAPS) {
+                        pendingLapStartedMessages.removeFirst()
+                    }
+                    pendingLapStartedMessages.addLast(startedMessage)
+                    lastRelayedStartSensorNanos = activeStartNanos
+                }
+            }
             if (
-                startNanos != null &&
-                stopNanos != null &&
-                stopNanos != lastRelayedStopSensorNanos
+                completedStartNanos != null &&
+                completedStopNanos != null &&
+                completedStopNanos != lastRelayedStopSensorNanos
             ) {
-                val elapsedNanos = stopNanos - startNanos
+                val elapsedNanos = completedStopNanos - completedStartNanos
                 val lapMessage = SessionLapResultMessage(
                     senderDeviceName = localEndpointName(),
                     elapsedNanos = elapsedNanos,
@@ -992,14 +1077,14 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             appendEvent("lap relay error: ${error.localizedMessage ?: "unknown"}")
                         }
                     }
-                    lastRelayedStopSensorNanos = stopNanos
+                    lastRelayedStopSensorNanos = completedStopNanos
                 } else if (displayReconnectionPending) {
                     // Disconnected but trying to reconnect - cache for later
                     if (pendingLapResults.size >= MAX_PENDING_LAPS) {
                         pendingLapResults.removeFirst() // Drop oldest to make room
                     }
                     pendingLapResults.addLast(lapMessage)
-                    lastRelayedStopSensorNanos = stopNanos
+                    lastRelayedStopSensorNanos = completedStopNanos
                 }
                 // If disconnected and NOT trying to reconnect, don't cache (original behavior)
             }
@@ -1069,11 +1154,15 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             connectedEndpointIds = displayEndpointIdsForRows,
             deviceNamesByEndpointId = displayHostDeviceNamesByEndpointId,
             elapsedByEndpointId = displayLatestLapByEndpointId,
+            waitingEndpointIds = displayWaitingEndpointIds,
+            waitingStartElapsedRealtimeNanosByEndpointId = displayWaitingStartElapsedRealtimeNanosByEndpointId,
+            waitTextEnabledByEndpointId = displayWaitTextEnabledByEndpointId,
             limitMillisByEndpointId = displayLimitMillisByEndpointId,
             hostStartSensorNanos = timelineForUi.hostStartSensorNanos,
             hostStopSensorNanos = timelineForUi.hostStopSensorNanos,
             monitoringActive = raceState.monitoringActive,
             nowSensorNanos = raceSessionController.estimateLocalSensorNanosNow(),
+            nowDisplayElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
         )
         updateUiState {
             copy(
@@ -1252,9 +1341,19 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         connectedEndpointIds.any { endpointId ->
                             displayLatestLapByEndpointId[endpointId] == null
                         }
-                    val shouldRefreshForDisplayRows = isDisplayRole &&
-                        raceState.timeline.hostStartSensorNanos != null &&
-                        hasPendingDisplayFinals
+                    val hasDisplayLocalWaitingTimers = isDisplayRole &&
+                        connectedEndpointIds.any { endpointId ->
+                            displayWaitingEndpointIds.contains(endpointId) &&
+                                displayLatestLapByEndpointId[endpointId] == null &&
+                                displayWaitTextEnabledByEndpointId[endpointId] == false &&
+                                displayWaitingStartElapsedRealtimeNanosByEndpointId[endpointId] != null
+                        }
+                    val shouldRefreshForDisplayRows = hasDisplayLocalWaitingTimers ||
+                        (
+                            isDisplayRole &&
+                                raceState.timeline.hostStartSensorNanos != null &&
+                                hasPendingDisplayFinals
+                            )
                     if (!isAppResumed || (!raceState.monitoringActive && !shouldRefreshForDisplayRows)) {
                         break
                     }
@@ -1301,6 +1400,15 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private fun flushPendingLapResults() {
         val hostEndpoint = displayConnectedHostEndpointId ?: return
 
+        while (pendingLapStartedMessages.isNotEmpty()) {
+            val startedMessage = pendingLapStartedMessages.removeFirst()
+            connectionsManager.sendMessage(hostEndpoint, startedMessage.toJsonString()) { result ->
+                if (result.isFailure) {
+                    pendingLapStartedMessages.addFirst(startedMessage)
+                }
+            }
+        }
+
         while (pendingLapResults.isNotEmpty()) {
             val lapMessage = pendingLapResults.removeFirst()
             connectionsManager.sendMessage(hostEndpoint, lapMessage.toJsonString()) { result ->
@@ -1318,6 +1426,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         limitMillis: Long?,
         sensitivityPercent: Int?,
         autoReadyDelaySeconds: Int?,
+        waitTextEnabled: Boolean?,
     ) {
         val hostEndpoint = displayConnectedHostEndpointId
         if (hostEndpoint.isNullOrBlank()) {
@@ -1331,6 +1440,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             limitMillis = limitMillis,
             sensitivityPercent = sensitivityPercent,
             autoReadyDelaySeconds = autoReadyDelaySeconds,
+            waitTextEnabled = waitTextEnabled,
         ).toJsonString()
         connectionsManager.sendMessage(hostEndpoint, payload) { result ->
             result.exceptionOrNull()?.let { error ->
@@ -1396,6 +1506,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     return@launch
                 }
                 displayLatestLapByEndpointId.remove(endpointId)
+                displayWaitingEndpointIds.remove(endpointId)
+                displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(endpointId)
                 val resetPayload = SessionControlCommandMessage(
                     action = SessionControlAction.RESET_TIMER,
                     targetEndpointId = endpointId,
@@ -1403,6 +1515,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     limitMillis = null,
                     sensitivityPercent = null,
                     autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
                 ).toJsonString()
                 connectionsManager.sendMessage(endpointId, resetPayload) { result ->
                     result.exceptionOrNull()?.let { error ->
@@ -1431,6 +1544,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
 
     private fun clearDisplayRelayReconnectionState() {
         displayReconnectionPending = false
+        pendingLapStartedMessages.clear()
         pendingLapResults.clear()
     }
 
@@ -1439,6 +1553,9 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         displayControllerEndpointIds.clear()
         displayHostDeviceNamesByEndpointId.clear()
         displayLatestLapByEndpointId.clear()
+        displayWaitingEndpointIds.clear()
+        displayWaitingStartElapsedRealtimeNanosByEndpointId.clear()
+        displayWaitTextEnabledByEndpointId.clear()
         displayLimitMillisByEndpointId.clear()
         displayAutoReadyDelaySecondsByEndpointId.clear()
     }
@@ -1617,11 +1734,15 @@ internal fun buildDisplayLapRowsForConnectedDevices(
     connectedEndpointIds: Set<String>,
     deviceNamesByEndpointId: Map<String, String>,
     elapsedByEndpointId: Map<String, Long>,
+    waitingEndpointIds: Set<String> = emptySet(),
+    waitingStartElapsedRealtimeNanosByEndpointId: Map<String, Long> = emptyMap(),
+    waitTextEnabledByEndpointId: Map<String, Boolean> = emptyMap(),
     limitMillisByEndpointId: Map<String, Long>,
     hostStartSensorNanos: Long?,
     hostStopSensorNanos: Long?,
     monitoringActive: Boolean,
     nowSensorNanos: Long,
+    nowDisplayElapsedRealtimeNanos: Long = nowSensorNanos,
 ): List<DisplayLapRow> {
     val shouldShowLiveElapsed = hostStartSensorNanos != null &&
         (monitoringActive || hostStopSensorNanos != null)
@@ -1632,11 +1753,29 @@ internal fun buildDisplayLapRowsForConnectedDevices(
     }
     return connectedEndpointIds.map { endpointId ->
         val deviceName = deviceNamesByEndpointId[endpointId]?.takeIf { it.isNotBlank() } ?: endpointId
-        val elapsedNanos = elapsedByEndpointId[endpointId] ?: liveElapsedNanos
-        val lapTimeLabel = elapsedNanos?.let { elapsed ->
-            val totalMillis = (elapsed / 1_000_000L).coerceAtLeast(0L)
-            formatElapsedTimerDisplay(totalMillis)
-        } ?: "READY"
+        val endpointFinalNanos = elapsedByEndpointId[endpointId]
+        val endpointIsWaiting = endpointFinalNanos == null && waitingEndpointIds.contains(endpointId)
+        val waitTextEnabled = waitTextEnabledByEndpointId[endpointId] != false
+        val waitingStartElapsedRealtimeNanos = waitingStartElapsedRealtimeNanosByEndpointId[endpointId]
+        val localDisplayTimerNanos = if (
+            endpointIsWaiting &&
+            !waitTextEnabled &&
+            waitingStartElapsedRealtimeNanos != null
+        ) {
+            (nowDisplayElapsedRealtimeNanos - waitingStartElapsedRealtimeNanos).coerceAtLeast(0L)
+        } else {
+            null
+        }
+        val elapsedNanos = endpointFinalNanos ?: localDisplayTimerNanos ?: if (endpointIsWaiting) null else liveElapsedNanos
+        val lapTimeLabel = when {
+            elapsedNanos != null -> {
+                val totalMillis = (elapsedNanos / 1_000_000L).coerceAtLeast(0L)
+                formatElapsedTimerDisplay(totalMillis)
+            }
+            endpointIsWaiting -> "WAIT"
+            else -> "READY"
+        }
+        val shouldPulseWait = endpointIsWaiting && waitTextEnabled
         val limitMillis = limitMillisByEndpointId[endpointId]
         val limitNanos = limitMillis?.times(1_000_000L)
         val isOverLimit = limitNanos != null && elapsedNanos != null && elapsedNanos > limitNanos
@@ -1647,6 +1786,7 @@ internal fun buildDisplayLapRowsForConnectedDevices(
             limitLabel = limitMillis?.let(::formatDisplayLimitLabel),
             isOverLimit = isOverLimit,
             isUnderLimit = isUnderLimit,
+            isWaiting = shouldPulseWait,
         )
     }
 }

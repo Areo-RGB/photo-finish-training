@@ -38,6 +38,28 @@ class RaceSessionModelsTest {
     }
 
     @Test
+    fun `lap started message round-trips sender`() {
+        val original = SessionLapStartedMessage(senderDeviceName = "Pixel 7")
+
+        val parsed = SessionLapStartedMessage.tryParse(original.toJsonString())
+
+        assertNotNull(parsed)
+        assertEquals("Pixel 7", parsed.senderDeviceName)
+    }
+
+    @Test
+    fun `lap started message rejects empty sender`() {
+        val invalid = """
+            {
+              "type": "lap_started",
+              "senderDeviceName": ""
+            }
+        """.trimIndent()
+
+        assertNull(SessionLapStartedMessage.tryParse(invalid))
+    }
+
+    @Test
     fun `control command accepts display limit with positive millis`() {
         val raw = SessionControlCommandMessage(
             action = SessionControlAction.SET_DISPLAY_LIMIT,
@@ -94,6 +116,39 @@ class RaceSessionModelsTest {
               "targetEndpointId": "ep-1",
               "senderDeviceName": "Controller",
               "autoReadyDelaySeconds": 8
+            }
+        """.trimIndent()
+
+        assertNull(SessionControlCommandMessage.tryParse(invalid))
+    }
+
+    @Test
+    fun `control command accepts wait text mode toggle`() {
+        val raw = SessionControlCommandMessage(
+            action = SessionControlAction.SET_WAIT_TEXT_MODE,
+            targetEndpointId = "ep-1",
+            senderDeviceName = "Controller",
+            limitMillis = null,
+            sensitivityPercent = null,
+            autoReadyDelaySeconds = null,
+            waitTextEnabled = false,
+        ).toJsonString()
+
+        val parsed = SessionControlCommandMessage.tryParse(raw)
+
+        assertNotNull(parsed)
+        assertEquals(SessionControlAction.SET_WAIT_TEXT_MODE, parsed.action)
+        assertEquals(false, parsed.waitTextEnabled)
+    }
+
+    @Test
+    fun `control command rejects wait text mode without payload`() {
+        val invalid = """
+            {
+              "type": "control_command",
+              "action": "set_wait_text_mode",
+              "targetEndpointId": "ep-1",
+              "senderDeviceName": "Controller"
             }
         """.trimIndent()
 

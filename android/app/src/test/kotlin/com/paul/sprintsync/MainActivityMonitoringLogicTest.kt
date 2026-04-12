@@ -226,6 +226,66 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
+    fun `display rows show WAIT when endpoint has started but no final lap yet`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
+            elapsedByEndpointId = emptyMap(),
+            waitingEndpointIds = linkedSetOf("ep-1"),
+            limitMillisByEndpointId = emptyMap(),
+            hostStartSensorNanos = 1_000_000_000L,
+            hostStopSensorNanos = null,
+            monitoringActive = true,
+            nowSensorNanos = 2_730_000_000L,
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals("WAIT", rows[0].lapTimeLabel)
+        assertEquals(true, rows[0].isWaiting)
+    }
+
+    @Test
+    fun `display rows show local timer when wait text mode is disabled`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
+            elapsedByEndpointId = emptyMap(),
+            waitingEndpointIds = linkedSetOf("ep-1"),
+            waitingStartElapsedRealtimeNanosByEndpointId = mapOf("ep-1" to 1_000_000_000L),
+            waitTextEnabledByEndpointId = mapOf("ep-1" to false),
+            limitMillisByEndpointId = emptyMap(),
+            hostStartSensorNanos = null,
+            hostStopSensorNanos = null,
+            monitoringActive = false,
+            nowSensorNanos = 0L,
+            nowDisplayElapsedRealtimeNanos = 2_500_000_000L,
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals(formatElapsedTimerDisplay(1_500L), rows[0].lapTimeLabel)
+        assertEquals(false, rows[0].isWaiting)
+    }
+
+    @Test
+    fun `display rows prefer final lap over WAIT marker`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
+            elapsedByEndpointId = mapOf("ep-1" to 1_730_000_000L),
+            waitingEndpointIds = linkedSetOf("ep-1"),
+            limitMillisByEndpointId = emptyMap(),
+            hostStartSensorNanos = 1_000_000_000L,
+            hostStopSensorNanos = null,
+            monitoringActive = true,
+            nowSensorNanos = 2_730_000_000L,
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals(formatElapsedTimerDisplay(1_730L), rows[0].lapTimeLabel)
+        assertEquals(false, rows[0].isWaiting)
+    }
+
+    @Test
     fun `display rows show formatted lap for connected endpoints with lap`() {
         val rows = buildDisplayLapRowsForConnectedDevices(
             connectedEndpointIds = linkedSetOf("ep-1"),
