@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         private const val DEFAULT_SERVICE_ID = "training.variant.nearby"
         private const val PERMISSIONS_REQUEST_CODE = 7301
         private const val TIMER_REFRESH_INTERVAL_MS = 100L
+        private const val DISPLAY_TIMER_REFRESH_INTERVAL_MS = 33L
         private const val TAG = "SprintSyncRuntime"
         private const val MAX_PENDING_LAPS = 100
         private const val MANUAL_AUTO_READY_DELAY_SECONDS = 0
@@ -1363,7 +1364,12 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     ) {
                         syncControllerSummaries()
                     }
-                    delay(TIMER_REFRESH_INTERVAL_MS)
+                    val refreshDelayMillis = if (hasDisplayLocalWaitingTimers) {
+                        DISPLAY_TIMER_REFRESH_INTERVAL_MS
+                    } else {
+                        TIMER_REFRESH_INTERVAL_MS
+                    }
+                    delay(refreshDelayMillis)
                 }
             } finally {
                 logRuntimeDiagnostic("timer refresh loop stopped")
