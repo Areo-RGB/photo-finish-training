@@ -70,7 +70,7 @@ internal class SensorNativeCameraSession(
             .setResolutionStrategy(
                 ResolutionStrategy(
                     SensorNativeCameraPolicy.ANALYSIS_TARGET_RESOLUTION,
-                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
                 ),
             )
             .build()
@@ -99,9 +99,11 @@ internal class SensorNativeCameraSession(
 
         val localPreviewView = if (includePreview) previewView else null
         val preview = localPreviewView?.let { view ->
-            Preview.Builder().build().also { useCase ->
-                useCase.setSurfaceProvider(view.surfaceProvider)
-            }
+            Preview.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .build().also { useCase ->
+                    useCase.setSurfaceProvider(view.surfaceProvider)
+                }
         }
         previewUseCase = preview
 

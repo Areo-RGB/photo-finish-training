@@ -1,7 +1,7 @@
 {
   "servers": {
     "mcphub": {
-      "url": "http://localhost:3000/mcp/b796d764-5d19-4c9a-9b22-81128494df21",
+      "url": "http://localhost:3000/mcp/b7a86721-284b-4455-b833-43582fa9642f",
       "headers": {
         "Authorization": "Bearer <your-access-token>"
       }

@@ -27,6 +27,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "ENABLE_DEBUG_VIEW", "false")
         buildConfigField("boolean", "TCP_ONLY", "false")
         buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
         buildConfigField("int", "TCP_HOST_PORT", "9000")
@@ -40,7 +41,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "ENABLE_DEBUG_VIEW", "true")
+        }
         release {
+            buildConfigField("boolean", "ENABLE_DEBUG_VIEW", "false")
             signingConfig = signingConfigs.getByName("debug")
         }
     }

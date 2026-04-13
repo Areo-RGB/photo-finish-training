@@ -180,17 +180,33 @@ class SprintSyncAppLayoutLogicTest {
     }
 
     @Test
-    fun `single-device mode hides run detail metrics and fps requires debug`() {
+    fun `single-device mode hides run detail metrics and fps requires debug view access`() {
         assertFalse(shouldShowRunDetailMetrics(SessionOperatingMode.SINGLE_DEVICE))
         assertTrue(shouldShowRunDetailMetrics(SessionOperatingMode.DISPLAY_HOST))
-        assertTrue(shouldShowCameraFpsInfo(showDebugInfo = true))
-        assertFalse(shouldShowCameraFpsInfo(showDebugInfo = false))
+        assertTrue(shouldShowCameraFpsInfo(debugViewEnabled = true, showDebugInfo = true))
+        assertFalse(shouldShowCameraFpsInfo(debugViewEnabled = true, showDebugInfo = false))
+        assertFalse(shouldShowCameraFpsInfo(debugViewEnabled = false, showDebugInfo = true))
     }
 
     @Test
-    fun `monitoring connection panel only shows when debug is on`() {
-        assertTrue(shouldShowMonitoringConnectionDebugInfo(showDebugInfo = true))
-        assertFalse(shouldShowMonitoringConnectionDebugInfo(showDebugInfo = false))
+    fun `debug controls and panel require debug view enabled`() {
+        assertTrue(shouldShowDebugToggle(debugViewEnabled = true))
+        assertFalse(shouldShowDebugToggle(debugViewEnabled = false))
+        assertTrue(shouldShowDebugSection(debugViewEnabled = true, showDebugInfo = true))
+        assertFalse(shouldShowDebugSection(debugViewEnabled = true, showDebugInfo = false))
+        assertFalse(shouldShowDebugSection(debugViewEnabled = false, showDebugInfo = true))
+        assertTrue(
+            shouldShowMonitoringConnectionDebugInfo(
+                debugViewEnabled = true,
+                showDebugInfo = true,
+            ),
+        )
+        assertFalse(
+            shouldShowMonitoringConnectionDebugInfo(
+                debugViewEnabled = false,
+                showDebugInfo = true,
+            ),
+        )
     }
 
     @Test

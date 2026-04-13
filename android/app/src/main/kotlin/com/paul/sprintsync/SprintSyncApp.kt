@@ -152,6 +152,7 @@ data class DisplayLapRow(
 @Composable
 fun SprintSyncApp(
     uiState: SprintSyncUiState,
+    debugViewEnabled: Boolean,
     previewViewFactory: SensorNativePreviewViewFactory,
     setupActionProfile: SetupActionProfile = SetupActionProfile.SINGLE_ONLY,
     runtimeDeviceConfig: com.paul.sprintsync.core.RuntimeDeviceConfig =
@@ -248,15 +249,21 @@ fun SprintSyncApp(
                             ) {
                                 SecondaryButton(text = "Stop", onClick = onStopMonitoring)
                             }
-                            TextButton(onClick = { showDebugInfo = !showDebugInfo }) {
-                                Text(if (showDebugInfo) "Debug On" else "Debug Off")
+                            if (shouldShowDebugToggle(debugViewEnabled)) {
+                                TextButton(onClick = { showDebugInfo = !showDebugInfo }) {
+                                    Text(if (showDebugInfo) "Debug On" else "Debug Off")
+                                }
                             }
                         }
                     }
                 }
             }
 
-            if (showDebugInfo && uiState.stage != SessionStage.MONITORING && !isDisplayHostMode) {
+            if (
+                shouldShowDebugSection(debugViewEnabled, showDebugInfo) &&
+                uiState.stage != SessionStage.MONITORING &&
+                !isDisplayHostMode
+            ) {
                 item {
                     StatusCard(uiState)
                 }
@@ -325,7 +332,6 @@ fun SprintSyncApp(
                                 RunMetricsCard(
                                     uiState = uiState,
                                     isHost = uiState.isHost,
-                                    showDebugInfo = showDebugInfo,
                                     onResetRun = onResetRun,
                                 )
                             }
@@ -340,6 +346,7 @@ fun SprintSyncApp(
                                 isHost = uiState.isHost,
                                 localRole = uiState.localRole,
                                 localCameraFacing = localDevice?.cameraFacing ?: SessionCameraFacing.REAR,
+                                debugViewEnabled = debugViewEnabled,
                                 showDebugInfo = showDebugInfo,
                                 connectionTypeLabel = uiState.monitoringConnectionTypeLabel,
                                 syncModeLabel = uiState.monitoringSyncModeLabel,
@@ -377,7 +384,6 @@ fun SprintSyncApp(
                             item {
                                 AdvancedDetectionCard(
                                     uiState = uiState,
-                                    showDebugInfo = showDebugInfo,
                                     onUpdateThreshold = onUpdateThreshold,
                                     onUpdateRoiCenter = onUpdateRoiCenter,
                                     onUpdateRoiWidth = onUpdateRoiWidth,
@@ -389,13 +395,19 @@ fun SprintSyncApp(
                 }
             }
 
-            if (showDebugInfo && uiState.connectedEndpoints.isNotEmpty()) {
+            if (shouldShowDebugSection(debugViewEnabled, showDebugInfo) && !isDisplayHostMode) {
+                item {
+                    SensorDebugViewCard(uiState)
+                }
+            }
+
+            if (shouldShowDebugSection(debugViewEnabled, showDebugInfo) && uiState.connectedEndpoints.isNotEmpty()) {
                 item {
                     ConnectedCard(uiState.connectedEndpoints)
                 }
             }
 
-            if (showDebugInfo && uiState.recentEvents.isNotEmpty()) {
+            if (shouldShowDebugSection(debugViewEnabled, showDebugInfo) && uiState.recentEvents.isNotEmpty()) {
                 item {
                     EventsCard(uiState.recentEvents)
                 }
@@ -435,13 +447,34 @@ private fun StatusCard(uiState: SprintSyncUiState) {
             MetricDisplay(label = "Motion", value = uiState.monitoringSummary)
             MetricDisplay(label = "Clock", value = uiState.clockSummary)
             uiState.lastNearbyEvent?.let { Text("Last Connection Event: $it") }
-            uiState.lastSensorEvent?.let { Text("Last Sensor: $it") }
             if (!uiState.permissionGranted && uiState.deniedPermissions.isNotEmpty()) {
                 Text(
                     "Missing permissions: ${uiState.deniedPermissions.joinToString()}",
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SensorDebugViewCard(uiState: SprintSyncUiState) {
+    val fpsLabel = uiState.observedFps?.let { String.format("%.1f", it) } ?: "--.-"
+    val targetSuffix = uiState.targetFpsUpper?.let { " · target $it" } ?: ""
+    val rawScoreLabel = uiState.rawScore?.let { "%.4f".format(it) } ?: "-"
+    val baselineLabel = uiState.baseline?.let { "%.4f".format(it) } ?: "-"
+    val effectiveScoreLabel = uiState.effectiveScore?.let { "%.4f".format(it) } ?: "-"
+    SprintSyncCard {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SectionHeader("Sensor Debug")
+            uiState.lastSensorEvent?.let { Text("Last Sensor: $it") }
+            Text("Camera: $fpsLabel fps · ${uiState.cameraFpsModeLabel}$targetSuffix")
+            Text("Raw score: $rawScoreLabel")
+            Text("Baseline: $baselineLabel")
+            Text("Effective: $effectiveScoreLabel")
+            MetricDisplay(label = "Frame Sensor Nanos", value = "${uiState.frameSensorNanos ?: "-"}")
+            Text("Frames: ${uiState.processedFrameCount}/${uiState.streamFrameCount}")
+            Text("Analyze every N frames: ${uiState.processEveryNFrames}")
         }
     }
 }
@@ -554,6 +587,7 @@ private fun MonitoringSummaryCard(
     isHost: Boolean,
     localRole: SessionDeviceRole,
     localCameraFacing: SessionCameraFacing,
+    debugViewEnabled: Boolean,
     showDebugInfo: Boolean,
     connectionTypeLabel: String,
     syncModeLabel: String,
@@ -624,7 +658,7 @@ private fun MonitoringSummaryCard(
 
             if (operatingMode == SessionOperatingMode.SINGLE_DEVICE) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (shouldShowMonitoringConnectionDebugInfo(showDebugInfo)) {
+                    if (shouldShowMonitoringConnectionDebugInfo(debugViewEnabled, showDebugInfo)) {
                         Text(
                             "Connection: $connectionTypeLabel",
                             style = MaterialTheme.typography.bodySmall,
@@ -922,10 +956,11 @@ private fun MonitoringSummaryCard(
                         MonitoringPreviewInfoPanel(
                             isHost = isHost,
                             localRole = localRole,
-                            localCameraFacing = localCameraFacing,
-                            showDebugInfo = showDebugInfo,
-                            connectionTypeLabel = connectionTypeLabel,
-                            syncModeLabel = syncModeLabel,
+                localCameraFacing = localCameraFacing,
+                debugViewEnabled = debugViewEnabled,
+                showDebugInfo = showDebugInfo,
+                connectionTypeLabel = connectionTypeLabel,
+                syncModeLabel = syncModeLabel,
                             latencyLabel = latencyLabel,
                             userMonitoringEnabled = userMonitoringEnabled,
                             onSetMonitoringEnabled = onSetMonitoringEnabled,
@@ -951,6 +986,7 @@ private fun MonitoringSummaryCard(
                         isHost = isHost,
                         localRole = localRole,
                         localCameraFacing = localCameraFacing,
+                        debugViewEnabled = debugViewEnabled,
                         showDebugInfo = showDebugInfo,
                         connectionTypeLabel = connectionTypeLabel,
                         syncModeLabel = syncModeLabel,
@@ -1003,6 +1039,7 @@ private fun MonitoringPreviewInfoPanel(
     isHost: Boolean,
     localRole: SessionDeviceRole,
     localCameraFacing: SessionCameraFacing,
+    debugViewEnabled: Boolean,
     showDebugInfo: Boolean,
     connectionTypeLabel: String,
     syncModeLabel: String,
@@ -1039,7 +1076,7 @@ private fun MonitoringPreviewInfoPanel(
                 }
             }
         }
-        if (shouldShowMonitoringConnectionDebugInfo(showDebugInfo)) {
+        if (shouldShowMonitoringConnectionDebugInfo(debugViewEnabled, showDebugInfo)) {
             Text("Connection: $connectionTypeLabel", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             Text(
                 "Sync: $syncModeLabel · Latency: $latencyLabel",
@@ -1170,7 +1207,6 @@ private fun PreviewSurface(previewViewFactory: SensorNativePreviewViewFactory, r
 @Composable
 private fun AdvancedDetectionCard(
     uiState: SprintSyncUiState,
-    showDebugInfo: Boolean,
     onUpdateThreshold: (Double) -> Unit,
     onUpdateRoiCenter: (Double) -> Unit,
     onUpdateRoiWidth: (Double) -> Unit,
@@ -1220,16 +1256,6 @@ private fun AdvancedDetectionCard(
                 )
 
                 Spacer(Modifier.height(4.dp))
-                SectionHeader("Live Stats")
-                Text("Raw score: ${uiState.rawScore?.let { String.format("%.4f", it) } ?: "-"}")
-                Text("Baseline: ${uiState.baseline?.let { String.format("%.4f", it) } ?: "-"}")
-                Text("Effective: ${uiState.effectiveScore?.let { String.format("%.4f", it) } ?: "-"}")
-                if (showDebugInfo) {
-                    MetricDisplay(label = "Frame Sensor Nanos", value = "${uiState.frameSensorNanos ?: "-"}")
-                    Text("Frames: ${uiState.processedFrameCount}/${uiState.streamFrameCount}")
-                }
-
-                Spacer(Modifier.height(4.dp))
                 SectionHeader("Split History")
                 if (uiState.splitHistory.isEmpty()) {
                     Text("No split marks yet.")
@@ -1257,23 +1283,14 @@ private fun AdvancedDetectionCard(
 private fun RunMetricsCard(
     uiState: SprintSyncUiState,
     isHost: Boolean,
-    showDebugInfo: Boolean,
     onResetRun: () -> Unit,
 ) {
-    val fpsLabel = uiState.observedFps?.let { String.format("%.1f", it) } ?: "--.-"
-    val targetSuffix = uiState.targetFpsUpper?.let { " · target $it" } ?: ""
     SprintSyncCard {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (shouldShowCameraFpsInfo(showDebugInfo)) {
-                Text(
-                    "Camera: $fpsLabel fps · ${uiState.cameraFpsModeLabel}$targetSuffix",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
             Text(
                 text = uiState.elapsedDisplay,
                 style = MaterialTheme.typography.displayLarge
@@ -1612,7 +1629,14 @@ internal fun shouldShowMonitoringRoleAndToggles(mode: SessionOperatingMode): Boo
 internal fun shouldShowSingleDeviceCameraFacingToggle(mode: SessionOperatingMode): Boolean =
     mode == SessionOperatingMode.SINGLE_DEVICE
 
-internal fun shouldShowMonitoringConnectionDebugInfo(showDebugInfo: Boolean): Boolean = showDebugInfo
+internal fun shouldShowDebugToggle(debugViewEnabled: Boolean): Boolean = debugViewEnabled
+internal fun shouldShowDebugSection(debugViewEnabled: Boolean, showDebugInfo: Boolean): Boolean =
+    debugViewEnabled && showDebugInfo
+
+internal fun shouldShowMonitoringConnectionDebugInfo(
+    debugViewEnabled: Boolean,
+    showDebugInfo: Boolean,
+): Boolean = shouldShowDebugSection(debugViewEnabled, showDebugInfo)
 
 internal fun shouldShowSingleFlavorConnectingCard(
     setupActionProfile: SetupActionProfile,
@@ -1632,7 +1656,8 @@ internal fun shouldShowInlineMonitoringResetButton(mode: SessionOperatingMode): 
 internal fun shouldShowRunDetailMetrics(mode: SessionOperatingMode): Boolean =
     mode != SessionOperatingMode.SINGLE_DEVICE
 
-internal fun shouldShowCameraFpsInfo(showDebugInfo: Boolean): Boolean = showDebugInfo
+internal fun shouldShowCameraFpsInfo(debugViewEnabled: Boolean, showDebugInfo: Boolean): Boolean =
+    shouldShowDebugSection(debugViewEnabled, showDebugInfo)
 
 internal fun shouldShowPassiveDisplayClientView(
     stage: SessionStage,

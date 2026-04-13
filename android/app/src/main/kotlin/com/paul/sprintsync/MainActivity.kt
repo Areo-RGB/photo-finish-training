@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     companion object {
         private const val DEFAULT_SERVICE_ID = "training.variant.nearby"
         private const val PERMISSIONS_REQUEST_CODE = 7301
+        private const val CONTROLLER_SUMMARY_SYNC_INTERVAL_MS = 100L
         private const val TIMER_REFRESH_INTERVAL_MS = 100L
         private const val DISPLAY_TIMER_REFRESH_INTERVAL_MS = 33L
         private const val TAG = "SprintSyncRuntime"
@@ -75,6 +76,9 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private val uiState = mutableStateOf(SprintSyncUiState())
     private var pendingPermissionAction: (() -> Unit)? = null
     private var timerRefreshJob: Job? = null
+    private var controllerSummarySyncJob: Job? = null
+    @Volatile
+    private var controllerSummarySyncPending: Boolean = false
     private var isAppResumed: Boolean = false
     private var localCaptureStartPending: Boolean = false
     private var userMonitoringEnabled: Boolean = true
@@ -150,6 +154,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             com.paul.sprintsync.ui.theme.SprintSyncTheme {
                 SprintSyncApp(
                     uiState = uiState.value,
+                    debugViewEnabled = BuildConfig.ENABLE_DEBUG_VIEW,
                     previewViewFactory = previewViewFactory,
                     setupActionProfile = setupActionProfile,
                     runtimeDeviceConfig = runtimeDeviceConfig,
@@ -346,6 +351,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
 
     override fun onPause() {
         isAppResumed = false
+        stopControllerSummarySyncLoop(flushPending = true)
         stopTimerRefreshLoop()
         logRuntimeDiagnostic("host paused")
         sensorNativeController.onHostPaused()
@@ -357,6 +363,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         isAppResumed = true
         logRuntimeDiagnostic("host resumed")
         sensorNativeController.onHostResumed()
+        startControllerSummarySyncLoop()
         syncControllerSummaries()
     }
 
@@ -370,6 +377,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
 
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        stopControllerSummarySyncLoop(flushPending = false)
         stopTimerRefreshLoop()
         stopAutoDisplayReconnectLoop()
         cancelAllDisplayAutoReadyResets()
@@ -933,7 +941,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             is SensorNativeEvent.Error -> "native_error"
         }
         updateUiState { copy(lastSensorEvent = type) }
-        syncControllerSummaries()
+        controllerSummarySyncPending = true
         appendEvent("sensor:$type")
     }
 
@@ -1323,6 +1331,34 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
 
     private fun updateUiState(update: SprintSyncUiState.() -> SprintSyncUiState) {
         uiState.value = uiState.value.update()
+    }
+
+    private fun startControllerSummarySyncLoop() {
+        if (controllerSummarySyncJob?.isActive == true) {
+            return
+        }
+        controllerSummarySyncJob = lifecycleScope.launch {
+            try {
+                while (isActive) {
+                    if (controllerSummarySyncPending) {
+                        controllerSummarySyncPending = false
+                        syncControllerSummaries()
+                    }
+                    delay(CONTROLLER_SUMMARY_SYNC_INTERVAL_MS)
+                }
+            } finally {
+                controllerSummarySyncJob = null
+            }
+        }
+    }
+
+    private fun stopControllerSummarySyncLoop(flushPending: Boolean) {
+        controllerSummarySyncJob?.cancel()
+        controllerSummarySyncJob = null
+        if (flushPending && controllerSummarySyncPending) {
+            controllerSummarySyncPending = false
+            syncControllerSummaries()
+        }
     }
 
     private fun startTimerRefreshLoop() {
