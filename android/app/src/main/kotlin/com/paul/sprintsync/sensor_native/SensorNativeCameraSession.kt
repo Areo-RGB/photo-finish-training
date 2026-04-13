@@ -4,6 +4,7 @@ import android.hardware.camera2.CaptureRequest
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Range
+import android.util.Size
 import androidx.activity.ComponentActivity
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.CaptureRequestOptions
@@ -11,6 +12,8 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -63,9 +66,19 @@ internal class SensorNativeCameraSession(
         cancelPendingAeAwbLock()
         provider.unbindAll()
 
+        val resolutionSelector = ResolutionSelector.Builder()
+            .setResolutionStrategy(
+                ResolutionStrategy(
+                    SensorNativeCameraPolicy.ANALYSIS_TARGET_RESOLUTION,
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                ),
+            )
+            .build()
+
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+            .setResolutionSelector(resolutionSelector)
             .build()
         imageAnalysis.setAnalyzer(analyzerExecutor, analyzer)
 
@@ -209,6 +222,7 @@ internal class SensorNativeCameraSession(
 
 internal object SensorNativeCameraPolicy {
     const val AE_AWB_WARMUP_MS = 400L
+    val ANALYSIS_TARGET_RESOLUTION = Size(640, 480)
     private const val NORMAL_TARGET_FPS_UPPER = 60
     private const val PREFERRED_HS_FIXED_FPS = 120
 
