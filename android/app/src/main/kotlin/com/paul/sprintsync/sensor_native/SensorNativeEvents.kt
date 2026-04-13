@@ -8,9 +8,6 @@ sealed interface SensorNativeEvent {
         val observedFps: Double?,
         val cameraFpsMode: NativeCameraFpsMode,
         val targetFpsUpper: Int?,
-        val hostSensorMinusElapsedNanos: Long?,
-        val gpsUtcOffsetNanos: Long?,
-        val gpsFixElapsedRealtimeNanos: Long?,
     ) : SensorNativeEvent
 
     data class Trigger(
@@ -20,9 +17,6 @@ sealed interface SensorNativeEvent {
     data class State(
         val state: String,
         val monitoring: Boolean,
-        val hostSensorMinusElapsedNanos: Long?,
-        val gpsUtcOffsetNanos: Long?,
-        val gpsFixElapsedRealtimeNanos: Long?,
     ) : SensorNativeEvent
 
     data class Diagnostic(

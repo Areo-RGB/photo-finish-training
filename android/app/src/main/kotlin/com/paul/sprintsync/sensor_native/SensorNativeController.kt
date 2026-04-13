@@ -1,14 +1,9 @@
 package com.paul.sprintsync.sensor_native
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.camera.core.ImageAnalysis
@@ -27,16 +22,12 @@ class SensorNativeController(
         private const val TAG = "SensorNativeController"
         private const val PREVIEW_REBIND_RETRY_DELAY_MS = 200L
         private const val PREVIEW_REBIND_MAX_ATTEMPTS = 3
-        private const val GPS_WARMUP_MIN_DURATION_NANOS = 5_000_000_000L
-        private const val GPS_WARMUP_MIN_FIXES = 3
-        private const val GPS_REACQUIRE_RESTART_THROTTLE_NANOS = 5_000_000_000L
         private const val HS120_DOWNGRADE_FPS_THRESHOLD = 80.0
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val analyzerExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val frameDiffer = RoiFrameDiffer()
-    private val offsetSmoother = SensorOffsetSmoother()
     private val fpsMonitor = SensorNativeFpsMonitor(
         lowFpsThreshold = HS120_DOWNGRADE_FPS_THRESHOLD,
     )
@@ -58,21 +49,6 @@ class SensorNativeController(
     private var processedFrameCount = 0L
 
     @Volatile
-    private var hostSensorMinusElapsedNanos: Long? = null
-
-    @Volatile
-    private var lastSensorElapsedSampleNanos: Long? = null
-
-    @Volatile
-    private var lastSensorElapsedSampleCapturedAtNanos: Long? = null
-
-    @Volatile
-    private var gpsUtcOffsetNanos: Long? = null
-
-    @Volatile
-    private var gpsFixElapsedRealtimeNanos: Long? = null
-
-    @Volatile
     private var observedFps: Double? = null
 
     @Volatile
@@ -81,24 +57,8 @@ class SensorNativeController(
     @Volatile
     private var targetFpsUpper: Int? = null
 
-    @Volatile
-    private var gpsUpdatesStarted = false
-
-    @Volatile
-    private var gpsWarmupStartElapsedNanos: Long? = null
-
-    @Volatile
-    private var gpsConsecutiveFixCount: Int = 0
-
-    @Volatile
-    private var gpsWarmupReady: Boolean = false
-
-    @Volatile
-    private var lastGpsForceRestartElapsedNanos: Long? = null
-
     private var wasMonitoringBeforePause = false
     private var cameraProvider: ProcessCameraProvider? = null
-    private var locationManager: LocationManager? = null
     private var previewView: PreviewView? = null
     private var pendingPreviewRebindRunnable: Runnable? = null
     private var previewRebindAttemptCount = 0
@@ -112,50 +72,6 @@ class SensorNativeController(
             analyzer = this,
             emitError = ::emitError,
         )
-    }
-
-    private val gpsLocationListener = object : LocationListener {
-        override fun onLocationChanged(location: Location) {
-            val utcNanos = location.time * 1_000_000L
-            val elapsedNanos = location.elapsedRealtimeNanos
-            val warmup = advanceGpsWarmupState(
-                previous = GpsWarmupState(
-                    warmupStartElapsedNanos = gpsWarmupStartElapsedNanos,
-                    consecutiveFixCount = gpsConsecutiveFixCount,
-                    warmupReady = gpsWarmupReady,
-                ),
-                fixElapsedRealtimeNanos = elapsedNanos,
-                minFixes = GPS_WARMUP_MIN_FIXES,
-                minDurationNanos = GPS_WARMUP_MIN_DURATION_NANOS,
-            )
-            gpsWarmupStartElapsedNanos = warmup.warmupStartElapsedNanos
-            gpsConsecutiveFixCount = warmup.consecutiveFixCount
-            gpsWarmupReady = warmup.warmupReady
-            if (gpsWarmupReady) {
-                gpsUtcOffsetNanos = utcNanos - elapsedNanos
-                gpsFixElapsedRealtimeNanos = elapsedNanos
-            } else {
-                gpsUtcOffsetNanos = null
-                gpsFixElapsedRealtimeNanos = null
-            }
-            emitState(if (monitoring) "monitoring" else "idle")
-        }
-
-        override fun onProviderDisabled(provider: String) {
-            gpsUtcOffsetNanos = null
-            gpsFixElapsedRealtimeNanos = null
-            resetGpsWarmupState()
-            emitState(if (monitoring) "monitoring" else "idle")
-        }
-
-        override fun onProviderEnabled(provider: String) {
-            // no-op
-        }
-
-        @Deprecated("Deprecated in API")
-        override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {
-            // no-op
-        }
     }
 
     fun setEventListener(listener: ((SensorNativeEvent) -> Unit)?) {
@@ -174,7 +90,6 @@ class SensorNativeController(
             return
         }
         wasMonitoringBeforePause = false
-        startGpsUpdatesIfAvailable()
         startMonitoringBackend(
             onStarted = {
                 monitoring = true
@@ -189,7 +104,6 @@ class SensorNativeController(
 
     fun dispose() {
         cancelPreviewRebindRetries()
-        stopGpsUpdates()
         stopNativeMonitoringInternal()
         analyzerExecutor.shutdown()
     }
@@ -219,22 +133,6 @@ class SensorNativeController(
         }
     }
 
-    fun currentClockSyncElapsedNanos(maxSensorSampleAgeNanos: Long, requireSensorDomain: Boolean): Long? {
-        val nowElapsedNanos = SystemClock.elapsedRealtimeNanos()
-        val sampledElapsedNanos = lastSensorElapsedSampleNanos
-        val sampledCapturedAtNanos = lastSensorElapsedSampleCapturedAtNanos
-        if (sampledElapsedNanos != null && sampledCapturedAtNanos != null) {
-            val sampleAgeNanos = nowElapsedNanos - sampledCapturedAtNanos
-            if (sampleAgeNanos >= 0 && sampleAgeNanos <= maxSensorSampleAgeNanos) {
-                return sampledElapsedNanos + sampleAgeNanos
-            }
-        }
-        if (requireSensorDomain) {
-            return null
-        }
-        return nowElapsedNanos
-    }
-
     fun startNativeMonitoring(monitoringConfig: NativeMonitoringConfig, onComplete: (Result<Unit>) -> Unit) {
         val permission = ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA)
         if (permission != PackageManager.PERMISSION_GRANTED) {
@@ -251,7 +149,6 @@ class SensorNativeController(
             return
         }
         resetStreamState()
-        startGpsUpdatesIfAvailable()
         startMonitoringBackend(
             onStarted = {
                 monitoring = true
@@ -264,10 +161,6 @@ class SensorNativeController(
                 onComplete(Result.failure(IllegalStateException(error)))
             },
         )
-    }
-
-    fun warmupGpsSync(forceRestart: Boolean = false) {
-        startGpsUpdatesIfAvailable(forceRestart = forceRestart)
     }
 
     fun stopNativeMonitoring() {
@@ -295,7 +188,7 @@ class SensorNativeController(
                 return
             }
             val frameSensorNanos = image.imageInfo.timestamp
-            val smoothedOffset = updateStreamTelemetry(frameSensorNanos)
+            updateStreamTelemetry(frameSensorNanos)
             val activeConfig = config
             if ((streamFrameCount % activeConfig.processEveryNFrames.toLong()) != 0L) {
                 return
@@ -319,7 +212,7 @@ class SensorNativeController(
                 rawScore = rawScore,
                 frameSensorNanos = frameSensorNanos,
             )
-            emitFrameStats(stats, smoothedOffset)
+            emitFrameStats(stats)
             stats.triggerEvent?.let { emitTrigger(it) }
         } catch (error: Exception) {
             emitError("Native frame analysis failed: ${error.localizedMessage ?: "unknown"}")
@@ -365,7 +258,6 @@ class SensorNativeController(
     private fun stopNativeMonitoringInternal() {
         cancelPreviewRebindRetries()
         monitoring = false
-        stopGpsUpdates()
         cameraSession.stop(cameraProvider)
         cameraProvider = null
         resetStreamState()
@@ -406,15 +298,8 @@ class SensorNativeController(
     private fun resetStreamState() {
         streamFrameCount = 0L
         processedFrameCount = 0L
-        hostSensorMinusElapsedNanos = null
-        lastSensorElapsedSampleNanos = null
-        lastSensorElapsedSampleCapturedAtNanos = null
-        gpsUtcOffsetNanos = null
-        gpsFixElapsedRealtimeNanos = null
-        resetGpsWarmupState()
         observedFps = null
         analysisInFlight.set(false)
-        offsetSmoother.reset()
         fpsMonitor.reset()
         detectionMath.resetRun()
         frameDiffer.reset()
@@ -499,89 +384,16 @@ class SensorNativeController(
         Log.d(TAG, "diag: $message")
     }
 
-    private fun updateStreamTelemetry(frameSensorNanos: Long): Long {
+    private fun updateStreamTelemetry(frameSensorNanos: Long) {
         streamFrameCount += 1
-        val elapsedNanos = SystemClock.elapsedRealtimeNanos()
-        val offsetSample = frameSensorNanos - elapsedNanos
-        val smoothedOffset = offsetSmoother.update(offsetSample)
-        lastSensorElapsedSampleNanos = frameSensorNanos - smoothedOffset
-        lastSensorElapsedSampleCapturedAtNanos = elapsedNanos
         val fpsObservation = fpsMonitor.update(
             frameSensorNanos = frameSensorNanos,
             mode = activeCameraFpsMode,
         )
         observedFps = fpsObservation.observedFps
-        hostSensorMinusElapsedNanos = smoothedOffset
-        return smoothedOffset
     }
 
-    private fun startGpsUpdatesIfAvailable(forceRestart: Boolean = false) {
-        val nowElapsedNanos = SystemClock.elapsedRealtimeNanos()
-        if (forceRestart) {
-            if (isGpsReacquireThrottled(
-                    lastRestartElapsedNanos = lastGpsForceRestartElapsedNanos,
-                    nowElapsedNanos = nowElapsedNanos,
-                    throttleNanos = GPS_REACQUIRE_RESTART_THROTTLE_NANOS,
-                )
-            ) {
-                return
-            }
-            if (gpsUpdatesStarted) {
-                stopGpsUpdates()
-            }
-            lastGpsForceRestartElapsedNanos = nowElapsedNanos
-            resetGpsWarmupState()
-        } else if (gpsUpdatesStarted) {
-            return
-        }
-        val locMgr = activity.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        locationManager = locMgr
-        if (locMgr == null) {
-            return
-        }
-        val fineLocationGranted = ContextCompat.checkSelfPermission(
-            activity,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!fineLocationGranted) {
-            return
-        }
-        try {
-            locMgr.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                1000L,
-                0f,
-                gpsLocationListener,
-                Looper.getMainLooper(),
-            )
-            gpsUpdatesStarted = true
-        } catch (error: SecurityException) {
-            Log.w(TAG, "GPS updates unavailable: missing runtime permission.", error)
-        } catch (error: IllegalArgumentException) {
-            Log.w(TAG, "GPS provider unavailable for location updates.", error)
-        }
-    }
-
-    private fun stopGpsUpdates() {
-        try {
-            locationManager?.removeUpdates(gpsLocationListener)
-        } catch (_: SecurityException) {
-            // ignore cleanup failures
-        }
-        locationManager = null
-        gpsUtcOffsetNanos = null
-        gpsFixElapsedRealtimeNanos = null
-        resetGpsWarmupState()
-        gpsUpdatesStarted = false
-    }
-
-    private fun resetGpsWarmupState() {
-        gpsWarmupStartElapsedNanos = null
-        gpsConsecutiveFixCount = 0
-        gpsWarmupReady = false
-    }
-
-    private fun emitFrameStats(stats: NativeFrameStats, sensorMinusElapsedNanos: Long?) {
+    private fun emitFrameStats(stats: NativeFrameStats) {
         emitEvent(
             SensorNativeEvent.FrameStats(
                 stats = stats,
@@ -590,9 +402,6 @@ class SensorNativeController(
                 observedFps = observedFps,
                 cameraFpsMode = activeCameraFpsMode,
                 targetFpsUpper = targetFpsUpper,
-                hostSensorMinusElapsedNanos = sensorMinusElapsedNanos,
-                gpsUtcOffsetNanos = gpsUtcOffsetNanos,
-                gpsFixElapsedRealtimeNanos = gpsFixElapsedRealtimeNanos,
             ),
         )
     }
@@ -606,9 +415,6 @@ class SensorNativeController(
             SensorNativeEvent.State(
                 state = state,
                 monitoring = monitoring,
-                hostSensorMinusElapsedNanos = hostSensorMinusElapsedNanos,
-                gpsUtcOffsetNanos = gpsUtcOffsetNanos,
-                gpsFixElapsedRealtimeNanos = gpsFixElapsedRealtimeNanos,
             ),
         )
     }
@@ -633,37 +439,4 @@ internal fun shouldSchedulePreviewRebindRetry(
     hasCameraProvider: Boolean,
 ): Boolean {
     return monitoring && hasPreviewView && hasCameraProvider
-}
-
-internal data class GpsWarmupState(
-    val warmupStartElapsedNanos: Long?,
-    val consecutiveFixCount: Int,
-    val warmupReady: Boolean,
-)
-
-internal fun advanceGpsWarmupState(
-    previous: GpsWarmupState,
-    fixElapsedRealtimeNanos: Long,
-    minFixes: Int,
-    minDurationNanos: Long,
-): GpsWarmupState {
-    val warmupStart = previous.warmupStartElapsedNanos ?: fixElapsedRealtimeNanos
-    val nextFixCount = previous.consecutiveFixCount + 1
-    val durationNanos = fixElapsedRealtimeNanos - warmupStart
-    val ready = previous.warmupReady ||
-        (nextFixCount >= minFixes && durationNanos >= minDurationNanos)
-    return GpsWarmupState(
-        warmupStartElapsedNanos = warmupStart,
-        consecutiveFixCount = nextFixCount,
-        warmupReady = ready,
-    )
-}
-
-internal fun isGpsReacquireThrottled(
-    lastRestartElapsedNanos: Long?,
-    nowElapsedNanos: Long,
-    throttleNanos: Long,
-): Boolean {
-    val lastRestart = lastRestartElapsedNanos ?: return false
-    return (nowElapsedNanos - lastRestart) < throttleNanos
 }

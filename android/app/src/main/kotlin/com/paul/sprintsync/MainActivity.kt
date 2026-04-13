@@ -63,8 +63,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         private const val TAG = "SprintSyncRuntime"
         private const val MAX_PENDING_LAPS = 100
         private const val MANUAL_AUTO_READY_DELAY_SECONDS = 0
-        private const val GPS_LOCK_VALIDITY_NANOS = 10_000_000_000L
-        private const val GPS_REACQUIRE_REQUEST_THROTTLE_NANOS = 5_000_000_000L
         private const val TARGET_MONITORING_WIFI_SSID = "TP-Link_86CA_5G"
     }
 
@@ -99,7 +97,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private var lastRelayedStartSensorNanos: Long? = null
     private var lastRelayedStopSensorNanos: Long? = null
     private var displayReconnectionPending: Boolean = false
-    private var lastGpsReacquireRequestElapsedNanos: Long? = null
     private val pendingLapStartedMessages = ArrayDeque<SessionLapStartedMessage>()
     private val pendingLapResults = ArrayDeque<SessionLapResultMessage>()
     private var pendingPermissionScope: PermissionScope = PermissionScope.NETWORK_ONLY
@@ -876,61 +873,11 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             localCaptureStartPending = false
         }
         motionDetectionController.handleSensorEvent(event)
-        val localOffsetNanos = when (event) {
-            is SensorNativeEvent.FrameStats -> event.hostSensorMinusElapsedNanos
-            is SensorNativeEvent.State -> event.hostSensorMinusElapsedNanos
-            is SensorNativeEvent.Trigger -> null
-            is SensorNativeEvent.Diagnostic -> null
-            is SensorNativeEvent.Error -> null
-        }
-        val localGpsUtcOffsetNanos = when (event) {
-            is SensorNativeEvent.FrameStats -> event.gpsUtcOffsetNanos
-            is SensorNativeEvent.State -> event.gpsUtcOffsetNanos
-            is SensorNativeEvent.Trigger -> null
-            is SensorNativeEvent.Diagnostic -> null
-            is SensorNativeEvent.Error -> null
-        }
-        val localGpsFixAgeNanos = when (event) {
-            is SensorNativeEvent.FrameStats ->
-                raceSessionController.computeGpsFixAgeNanos(event.gpsFixElapsedRealtimeNanos)
-            is SensorNativeEvent.State ->
-                raceSessionController.computeGpsFixAgeNanos(event.gpsFixElapsedRealtimeNanos)
-            is SensorNativeEvent.Trigger -> null
-            is SensorNativeEvent.Diagnostic -> null
-            is SensorNativeEvent.Error -> null
-        }
-        val localGpsFixElapsedRealtimeNanos = when (event) {
-            is SensorNativeEvent.FrameStats -> event.gpsFixElapsedRealtimeNanos
-            is SensorNativeEvent.State -> event.gpsFixElapsedRealtimeNanos
-            is SensorNativeEvent.Trigger -> null
-            is SensorNativeEvent.Diagnostic -> null
-            is SensorNativeEvent.Error -> null
-        }
-        val raceStage = raceSessionController.uiState.value.stage
-        val isGpsRelevantStage = raceStage == SessionStage.MONITORING
-        val shouldForceGpsReacquire = isGpsRelevantStage &&
-            localGpsFixElapsedRealtimeNanos != null &&
-            (localGpsFixAgeNanos == null || localGpsFixAgeNanos > GPS_LOCK_VALIDITY_NANOS)
-        if (shouldForceGpsReacquire) {
-            val nowElapsedNanos = SystemClock.elapsedRealtimeNanos()
-            val lastRequestElapsedNanos = lastGpsReacquireRequestElapsedNanos
-            if (lastRequestElapsedNanos == null ||
-                nowElapsedNanos - lastRequestElapsedNanos >= GPS_REACQUIRE_REQUEST_THROTTLE_NANOS
-            ) {
-                sensorNativeController.warmupGpsSync(forceRestart = true)
-                lastGpsReacquireRequestElapsedNanos = nowElapsedNanos
-            }
-        }
-        if (localOffsetNanos != null) {
-            raceSessionController.updateClockState(
-                localSensorMinusElapsedNanos = localOffsetNanos,
-            )
-        }
         if (event is SensorNativeEvent.Trigger) {
             raceSessionController.onLocalMotionTrigger(
                 triggerType = event.trigger.triggerType,
                 splitIndex = 0,
-                triggerSensorNanos = event.trigger.triggerSensorNanos,
+                triggerElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
             )
         }
         val type = when (event) {
@@ -961,10 +908,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         )
         applyRequestedOrientationForMode(mode)
         val shouldRunLocalCapture = shouldRunLocalMonitoring()
-
-        if (raceState.stage == SessionStage.MONITORING) {
-            sensorNativeController.warmupGpsSync()
-        }
 
         when (
             resolveLocalCaptureAction(
@@ -1027,7 +970,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             "Idle"
         }
         val isHost = raceState.networkRole == SessionNetworkRole.HOST || mode == SessionOperatingMode.DISPLAY_HOST
-        val isClient = raceState.networkRole == SessionNetworkRole.CLIENT
         val liveConnectedEndpoints = when (mode) {
             SessionOperatingMode.SINGLE_DEVICE -> setOfNotNull(displayConnectedHostEndpointId)
             SessionOperatingMode.DISPLAY_HOST -> connectionsManager.connectedEndpoints()
@@ -1099,12 +1041,6 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             }
         }
 
-        val monitoringSyncMode = when {
-            !isClient || !hasPeers || raceState.stage == SessionStage.SETUP -> "-"
-            else -> "LOCAL"
-        }
-        val monitoringLatencyMs: Int? = null
-        val clockLockWarningText: String? = null
         val connectedWifiSsid = currentConnectedWifiSsid()
         val wifiWarningText = when {
             isConnectedToExpectedWifi(connectedWifiSsid, TARGET_MONITORING_WIFI_SSID) -> null
@@ -1170,7 +1106,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             hostStartSensorNanos = timelineForUi.hostStartSensorNanos,
             hostStopSensorNanos = timelineForUi.hostStopSensorNanos,
             monitoringActive = raceState.monitoringActive,
-            nowSensorNanos = raceSessionController.estimateLocalSensorNanosNow(),
+            nowSensorNanos = SystemClock.elapsedRealtimeNanos(),
             nowDisplayElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
         )
         updateUiState {
@@ -1193,10 +1129,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     hostIp = displayConnectedHostEndpointId ?: BuildConfig.TCP_HOST_IP,
                     hostPort = BuildConfig.TCP_HOST_PORT,
                 ),
-                monitoringSyncModeLabel = monitoringSyncMode,
-                monitoringLatencyMs = monitoringLatencyMs,
                 hasConnectedPeers = hasPeers,
-                clockLockWarningText = clockLockWarningText,
                 wifiWarningText = wifiWarningText,
                 runStatusLabel = runStatusLabel,
                 runMarksCount = marksCount,
@@ -1242,10 +1175,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     }
 
     private fun requiredPermissions(scope: PermissionScope): List<String> {
-        val permissions = mutableListOf(
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        )
+        val permissions = mutableListOf<String>()
         if (scope == PermissionScope.CAMERA_AND_NETWORK) {
             permissions += Manifest.permission.CAMERA
         }
@@ -1315,7 +1245,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     ): String {
         val started = startedSensorNanos ?: return "00.00"
         val terminal = stoppedSensorNanos ?: if (monitoringActive) {
-            raceSessionController.estimateLocalSensorNanosNow()
+            SystemClock.elapsedRealtimeNanos()
         } else {
             started
         }

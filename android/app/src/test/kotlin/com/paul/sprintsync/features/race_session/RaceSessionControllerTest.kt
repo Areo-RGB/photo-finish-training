@@ -12,7 +12,6 @@ import kotlin.test.assertTrue
 class RaceSessionControllerTest {
     private fun createController(
         savedRuns: MutableList<LastRunResult> = mutableListOf(),
-        nowElapsedNanos: () -> Long = { 1_000_000_000L },
         loadedRun: LastRunResult? = null,
     ): RaceSessionController {
         return RaceSessionController(
@@ -20,7 +19,6 @@ class RaceSessionControllerTest {
             saveLastRun = { run -> savedRuns += run },
             sendMessage = { _, _, onComplete -> onComplete(Result.success(Unit)) },
             ioDispatcher = Dispatchers.Unconfined,
-            nowElapsedNanos = nowElapsedNanos,
         )
     }
 
@@ -56,8 +54,8 @@ class RaceSessionControllerTest {
         val controller = createController(savedRuns = savedRuns)
         controller.startSingleDeviceMonitoring()
 
-        controller.onLocalMotionTrigger("start", splitIndex = 0, triggerSensorNanos = 100L)
-        controller.onLocalMotionTrigger("stop", splitIndex = 0, triggerSensorNanos = 450L)
+        controller.onLocalMotionTrigger("start", splitIndex = 0, triggerElapsedRealtimeNanos = 100L)
+        controller.onLocalMotionTrigger("stop", splitIndex = 0, triggerElapsedRealtimeNanos = 450L)
 
         val completed = controller.uiState.value.latestCompletedTimeline
         assertNotNull(completed)
@@ -72,7 +70,7 @@ class RaceSessionControllerTest {
     fun `reset run clears timeline and latest completed run`() {
         val controller = createController()
         controller.startSingleDeviceMonitoring()
-        controller.onLocalMotionTrigger("start", splitIndex = 0, triggerSensorNanos = 200L)
+        controller.onLocalMotionTrigger("start", splitIndex = 0, triggerElapsedRealtimeNanos = 200L)
 
         controller.resetRun()
 
@@ -80,15 +78,6 @@ class RaceSessionControllerTest {
         assertEquals(null, state.timeline.hostStartSensorNanos)
         assertEquals(null, state.timeline.hostStopSensorNanos)
         assertEquals(null, state.latestCompletedTimeline)
-    }
-
-    @Test
-    fun `estimate local sensor now applies local offset`() {
-        val controller = createController(nowElapsedNanos = { 10_000L })
-
-        controller.updateClockState(localSensorMinusElapsedNanos = 250L)
-
-        assertEquals(10_250L, controller.estimateLocalSensorNanosNow())
     }
 
     @Test

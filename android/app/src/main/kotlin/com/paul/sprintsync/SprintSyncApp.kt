@@ -105,10 +105,7 @@ data class SprintSyncUiState(
     val localRole: SessionDeviceRole = SessionDeviceRole.UNASSIGNED,
     val userMonitoringEnabled: Boolean = true,
     val monitoringConnectionTypeLabel: String = "-",
-    val monitoringSyncModeLabel: String = "-",
-    val monitoringLatencyMs: Int? = null,
     val hasConnectedPeers: Boolean = false,
-    val clockLockWarningText: String? = null,
     val wifiWarningText: String? = null,
     val runStatusLabel: String = "Ready",
     val runMarksCount: Int = 0,
@@ -336,11 +333,6 @@ fun SprintSyncApp(
                                 )
                             }
                         }
-                        if (uiState.clockLockWarningText != null) {
-                            item {
-                                ClockWarningCard(uiState.clockLockWarningText)
-                            }
-                        }
                         item {
                             MonitoringSummaryCard(
                                 isHost = uiState.isHost,
@@ -349,8 +341,6 @@ fun SprintSyncApp(
                                 debugViewEnabled = debugViewEnabled,
                                 showDebugInfo = showDebugInfo,
                                 connectionTypeLabel = uiState.monitoringConnectionTypeLabel,
-                                syncModeLabel = uiState.monitoringSyncModeLabel,
-                                latencyMs = uiState.monitoringLatencyMs,
                                 userMonitoringEnabled = uiState.userMonitoringEnabled,
                                 onSetMonitoringEnabled = onSetMonitoringEnabled,
                                 onAssignLocalCameraFacing = { facing ->
@@ -590,8 +580,6 @@ private fun MonitoringSummaryCard(
     debugViewEnabled: Boolean,
     showDebugInfo: Boolean,
     connectionTypeLabel: String,
-    syncModeLabel: String,
-    latencyMs: Int?,
     userMonitoringEnabled: Boolean,
     onSetMonitoringEnabled: (Boolean) -> Unit,
     onAssignLocalCameraFacing: (SessionCameraFacing) -> Unit,
@@ -616,11 +604,6 @@ private fun MonitoringSummaryCard(
     onSetDeviceSensitivity: (String, Int) -> Unit,
     onResetRun: () -> Unit,
 ) {
-    val latencyLabel = when (syncModeLabel) {
-        "NTP" -> if (latencyMs == null) "-" else "$latencyMs ms"
-        "GPS" -> "GPS"
-        else -> "-"
-    }
     val controllerLimitInputs = remember { mutableStateMapOf<String, String>() }
     val controllerSensitivityInputs = remember { mutableStateMapOf<String, Float>() }
     var globalLimitInput by rememberSaveable { mutableStateOf("") }
@@ -661,11 +644,6 @@ private fun MonitoringSummaryCard(
                     if (shouldShowMonitoringConnectionDebugInfo(debugViewEnabled, showDebugInfo)) {
                         Text(
                             "Connection: $connectionTypeLabel",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray,
-                        )
-                        Text(
-                            "Sync: $syncModeLabel · Latency: $latencyLabel",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray,
                         )
@@ -960,8 +938,6 @@ private fun MonitoringSummaryCard(
                 debugViewEnabled = debugViewEnabled,
                 showDebugInfo = showDebugInfo,
                 connectionTypeLabel = connectionTypeLabel,
-                syncModeLabel = syncModeLabel,
-                            latencyLabel = latencyLabel,
                             userMonitoringEnabled = userMonitoringEnabled,
                             onSetMonitoringEnabled = onSetMonitoringEnabled,
                             onAssignLocalCameraFacing = onAssignLocalCameraFacing,
@@ -989,8 +965,6 @@ private fun MonitoringSummaryCard(
                         debugViewEnabled = debugViewEnabled,
                         showDebugInfo = showDebugInfo,
                         connectionTypeLabel = connectionTypeLabel,
-                        syncModeLabel = syncModeLabel,
-                        latencyLabel = latencyLabel,
                         userMonitoringEnabled = userMonitoringEnabled,
                         onSetMonitoringEnabled = onSetMonitoringEnabled,
                         onAssignLocalCameraFacing = onAssignLocalCameraFacing,
@@ -1042,8 +1016,6 @@ private fun MonitoringPreviewInfoPanel(
     debugViewEnabled: Boolean,
     showDebugInfo: Boolean,
     connectionTypeLabel: String,
-    syncModeLabel: String,
-    latencyLabel: String,
     userMonitoringEnabled: Boolean,
     onSetMonitoringEnabled: (Boolean) -> Unit,
     onAssignLocalCameraFacing: (SessionCameraFacing) -> Unit,
@@ -1078,11 +1050,6 @@ private fun MonitoringPreviewInfoPanel(
         }
         if (shouldShowMonitoringConnectionDebugInfo(debugViewEnabled, showDebugInfo)) {
             Text("Connection: $connectionTypeLabel", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            Text(
-                "Sync: $syncModeLabel · Latency: $latencyLabel",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
-            )
         }
         if (shouldShowMonitoringPreviewToggle(operatingMode)) {
             Row(
@@ -1138,20 +1105,6 @@ private fun MonitoringPreviewInfoPanel(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ClockWarningCard(text: String) {
-    SprintSyncCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Text("!", color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(8.dp))
-            Text(text, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

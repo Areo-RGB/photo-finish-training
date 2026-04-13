@@ -2,7 +2,6 @@ package com.paul.sprintsync.features.race_session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.paul.sprintsync.core.clock.ClockDomain
 import com.paul.sprintsync.core.models.LastRunResult
 import com.paul.sprintsync.core.repositories.LocalRepository
 import com.paul.sprintsync.core.services.NearbyEvent
@@ -25,10 +24,6 @@ data class SessionRaceTimeline(
     val hostSplitSensorNanos: List<Long> = emptyList(),
 )
 
-data class RaceSessionClockState(
-    val localSensorMinusElapsedNanos: Long? = null,
-)
-
 data class RaceSessionUiState(
     val stage: SessionStage = SessionStage.SETUP,
     val operatingMode: SessionOperatingMode = SessionOperatingMode.SINGLE_DEVICE,
@@ -48,7 +43,6 @@ class RaceSessionController(
     private val saveLastRun: RaceSessionSaveLastRun,
     private val sendMessage: RaceSessionSendMessage,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val nowElapsedNanos: () -> Long = { ClockDomain.nowElapsedNanos() },
 ) : ViewModel() {
     companion object {
         private const val DEFAULT_LOCAL_DEVICE_ID = "local-device"
@@ -59,7 +53,6 @@ class RaceSessionController(
         localRepository: LocalRepository,
         connectionsManager: SessionConnectionsManager,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-        nowElapsedNanos: () -> Long = { ClockDomain.nowElapsedNanos() },
     ) : this(
         loadLastRun = { localRepository.loadLastRun() },
         saveLastRun = { run -> localRepository.saveLastRun(run) },
@@ -67,7 +60,6 @@ class RaceSessionController(
             connectionsManager.sendMessage(endpointId, messageJson, onComplete)
         },
         ioDispatcher = ioDispatcher,
-        nowElapsedNanos = nowElapsedNanos,
     )
 
     private val _uiState = MutableStateFlow(
@@ -83,9 +75,6 @@ class RaceSessionController(
         ),
     )
     val uiState: StateFlow<RaceSessionUiState> = _uiState.asStateFlow()
-
-    private val _clockState = MutableStateFlow(RaceSessionClockState())
-    val clockState: StateFlow<RaceSessionClockState> = _clockState.asStateFlow()
 
     private var localDeviceId = DEFAULT_LOCAL_DEVICE_ID
 
@@ -292,11 +281,11 @@ class RaceSessionController(
         )
     }
 
-    fun onLocalMotionTrigger(triggerType: String, splitIndex: Int, triggerSensorNanos: Long) {
+    fun onLocalMotionTrigger(triggerType: String, splitIndex: Int, triggerElapsedRealtimeNanos: Long) {
         if (!_uiState.value.monitoringActive) {
             return
         }
-        handleSingleDeviceTrigger(triggerSensorNanos)
+        handleSingleDeviceTrigger(triggerElapsedRealtimeNanos)
     }
 
     fun totalDeviceCount(): Int {
@@ -321,28 +310,11 @@ class RaceSessionController(
         return localDeviceFromState().name
     }
 
-    fun updateClockState(localSensorMinusElapsedNanos: Long? = _clockState.value.localSensorMinusElapsedNanos) {
-        _clockState.value = RaceSessionClockState(localSensorMinusElapsedNanos = localSensorMinusElapsedNanos)
-    }
-
-    fun computeGpsFixAgeNanos(gpsFixElapsedRealtimeNanos: Long?): Long? {
-        return ClockDomain.computeGpsFixAgeNanos(gpsFixElapsedRealtimeNanos)
-    }
-
-    fun estimateLocalSensorNanosNow(): Long {
-        val now = nowElapsedNanos()
-        val localSensorMinusElapsedNanos = _clockState.value.localSensorMinusElapsedNanos ?: return now
-        return ClockDomain.elapsedToSensorNanos(
-            elapsedNanos = now,
-            sensorMinusElapsedNanos = localSensorMinusElapsedNanos,
-        )
-    }
-
-    private fun handleSingleDeviceTrigger(triggerSensorNanos: Long) {
+    private fun handleSingleDeviceTrigger(triggerElapsedRealtimeNanos: Long) {
         val current = _uiState.value.timeline
         if (current.hostStartSensorNanos == null) {
             _uiState.value = _uiState.value.copy(
-                timeline = current.copy(hostStartSensorNanos = triggerSensorNanos),
+                timeline = current.copy(hostStartSensorNanos = triggerElapsedRealtimeNanos),
                 runId = UUID.randomUUID().toString(),
                 lastEvent = "single_device_start",
             )
@@ -351,10 +323,10 @@ class RaceSessionController(
         if (current.hostStopSensorNanos != null) {
             return
         }
-        if (triggerSensorNanos <= current.hostStartSensorNanos) {
+        if (triggerElapsedRealtimeNanos <= current.hostStartSensorNanos) {
             return
         }
-        val completed = current.copy(hostStopSensorNanos = triggerSensorNanos)
+        val completed = current.copy(hostStopSensorNanos = triggerElapsedRealtimeNanos)
         maybePersistCompletedRun(completed)
         _uiState.value = _uiState.value.copy(
             timeline = SessionRaceTimeline(),
