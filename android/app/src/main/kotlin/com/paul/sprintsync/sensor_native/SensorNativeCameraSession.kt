@@ -6,8 +6,10 @@ import android.os.SystemClock
 import android.util.Range
 import android.util.Size
 import androidx.activity.ComponentActivity
+import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.CaptureRequestOptions
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -174,6 +176,7 @@ internal class SensorNativeCameraSession(
         mainHandler.postDelayed(lockRunnable, SensorNativeCameraPolicy.AE_AWB_WARMUP_MS)
     }
 
+    @OptIn(markerClass = [ExperimentalCamera2Interop::class])
     private fun applyCamera2Options(
         binding: CameraBinding,
         fpsRange: Range<Int>,
