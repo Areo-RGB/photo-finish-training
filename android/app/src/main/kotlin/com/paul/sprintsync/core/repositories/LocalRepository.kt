@@ -6,7 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.paul.sprintsync.core.models.LastRunResult
-import com.paul.sprintsync.features.motion_detection.MotionDetectionConfig
+import com.paul.sprintsync.feature.motion.domain.MotionDetectionConfig
 import kotlinx.coroutines.flow.first
 
 private val Context.dataStore by preferencesDataStore(name = "sprint_sync_store")

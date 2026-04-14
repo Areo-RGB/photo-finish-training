@@ -3,8 +3,8 @@ package com.paul.sprintsync
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.paul.sprintsync.features.race_session.SessionDeviceRole
-import com.paul.sprintsync.features.race_session.SessionOperatingMode
+import com.paul.sprintsync.feature.race.domain.SessionDeviceRole
+import com.paul.sprintsync.feature.race.domain.SessionOperatingMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -163,17 +163,17 @@ class SprintSyncAppLayoutLogicTest {
     fun `passive display client view only shows for monitoring single-device client display role`() {
         assertTrue(
             shouldShowPassiveDisplayClientView(
-                stage = com.paul.sprintsync.features.race_session.SessionStage.MONITORING,
+                stage = com.paul.sprintsync.feature.race.domain.SessionStage.MONITORING,
                 operatingMode = SessionOperatingMode.SINGLE_DEVICE,
-                networkRole = com.paul.sprintsync.features.race_session.SessionNetworkRole.CLIENT,
+                networkRole = com.paul.sprintsync.feature.race.domain.SessionNetworkRole.CLIENT,
                 localRole = SessionDeviceRole.DISPLAY,
             ),
         )
         assertFalse(
             shouldShowPassiveDisplayClientView(
-                stage = com.paul.sprintsync.features.race_session.SessionStage.SETUP,
+                stage = com.paul.sprintsync.feature.race.domain.SessionStage.SETUP,
                 operatingMode = SessionOperatingMode.SINGLE_DEVICE,
-                networkRole = com.paul.sprintsync.features.race_session.SessionNetworkRole.CLIENT,
+                networkRole = com.paul.sprintsync.feature.race.domain.SessionNetworkRole.CLIENT,
                 localRole = SessionDeviceRole.DISPLAY,
             ),
         )

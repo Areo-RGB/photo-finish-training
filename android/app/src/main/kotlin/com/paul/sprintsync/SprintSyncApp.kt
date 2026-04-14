@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +65,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -71,18 +75,18 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.paul.sprintsync.features.race_session.SessionCameraFacing
-import com.paul.sprintsync.features.race_session.SessionDevice
-import com.paul.sprintsync.features.race_session.SessionDeviceRole
-import com.paul.sprintsync.features.race_session.SessionNetworkRole
-import com.paul.sprintsync.features.race_session.SessionOperatingMode
-import com.paul.sprintsync.features.race_session.SessionStage
-import com.paul.sprintsync.features.race_session.sessionCameraFacingLabel
-import com.paul.sprintsync.features.race_session.sessionDeviceRoleLabel
-import com.paul.sprintsync.sensor_native.SensorNativePreviewViewFactory
-import com.paul.sprintsync.ui.components.*
-import com.paul.sprintsync.ui.theme.*
-import com.paul.sprintsync.ui.theme.InterExtraBoldTabularTypography
+import com.paul.sprintsync.feature.race.domain.SessionCameraFacing
+import com.paul.sprintsync.feature.race.domain.SessionDevice
+import com.paul.sprintsync.feature.race.domain.SessionDeviceRole
+import com.paul.sprintsync.feature.race.domain.SessionNetworkRole
+import com.paul.sprintsync.feature.race.domain.SessionOperatingMode
+import com.paul.sprintsync.feature.race.domain.SessionStage
+import com.paul.sprintsync.feature.race.domain.sessionCameraFacingLabel
+import com.paul.sprintsync.feature.race.domain.sessionDeviceRoleLabel
+import com.paul.sprintsync.feature.motion.data.nativebridge.SensorNativePreviewViewFactory
+import com.paul.sprintsync.core.ui.components.*
+import com.paul.sprintsync.core.theme.*
+import com.paul.sprintsync.core.theme.InterExtraBoldTabularTypography
 import kotlin.math.roundToInt
 
 data class SprintSyncUiState(
@@ -144,6 +148,9 @@ data class DisplayLapRow(
     val isOverLimit: Boolean = false,
     val isUnderLimit: Boolean = false,
     val isWaiting: Boolean = false,
+    val showLives: Boolean = false,
+    val currentLives: Int = 0,
+    val maxLives: Int = 10,
 )
 
 @Composable
@@ -165,6 +172,9 @@ fun SprintSyncApp(
     onSetAutoReadyDelay: (String, Int?) -> Unit,
     onSetWaitTextEnabled: (String, Boolean) -> Unit,
     onSetDeviceSensitivity: (String, Int) -> Unit,
+    onSetGameModeEnabled: (String, Boolean) -> Unit,
+    onSetGameModeLimit: (String, Long) -> Unit,
+    onSetGameModeLives: (String, Int) -> Unit,
     onSetMonitoringEnabled: (Boolean) -> Unit,
     onStopMonitoring: () -> Unit,
     onResetRun: () -> Unit,
@@ -367,6 +377,9 @@ fun SprintSyncApp(
                                 onSetAutoReadyDelay = onSetAutoReadyDelay,
                                 onSetWaitTextEnabled = onSetWaitTextEnabled,
                                 onSetDeviceSensitivity = onSetDeviceSensitivity,
+                                onSetGameModeEnabled = onSetGameModeEnabled,
+                                onSetGameModeLimit = onSetGameModeLimit,
+                                onSetGameModeLives = onSetGameModeLives,
                                 onResetRun = onResetRun,
                             )
                         }
@@ -602,6 +615,9 @@ private fun MonitoringSummaryCard(
     onSetAutoReadyDelay: (String, Int?) -> Unit,
     onSetWaitTextEnabled: (String, Boolean) -> Unit,
     onSetDeviceSensitivity: (String, Int) -> Unit,
+    onSetGameModeEnabled: (String, Boolean) -> Unit,
+    onSetGameModeLimit: (String, Long) -> Unit,
+    onSetGameModeLives: (String, Int) -> Unit,
     onResetRun: () -> Unit,
 ) {
     val controllerLimitInputs = remember { mutableStateMapOf<String, String>() }
@@ -610,6 +626,13 @@ private fun MonitoringSummaryCard(
     var globalAutoReadyDelaySeconds by rememberSaveable { mutableStateOf<Int?>(2) }
     var globalAutoReadyMenuExpanded by remember { mutableStateOf(false) }
     var globalWaitTextEnabled by rememberSaveable { mutableStateOf(true) }
+    var controllerTabIndex by rememberSaveable { mutableStateOf(0) }
+    var globalGameModeEnabled by rememberSaveable { mutableStateOf(false) }
+    var globalGameModeLimitMillis by rememberSaveable { mutableStateOf(5_000L) }
+    var globalGameModeLives by rememberSaveable { mutableStateOf(10) }
+    var globalGameModeLivesMenuExpanded by remember { mutableStateOf(false) }
+    val controllerGameLivesInputs = remember { mutableStateMapOf<String, Int>() }
+    val controllerGameLivesMenusExpanded = remember { mutableStateMapOf<String, Boolean>() }
     val globalAutoReadyLabel = globalAutoReadyDelaySeconds?.let { "$it s" } ?: "Manual"
     val controllerTargetDevices = remember(
         setupActionProfile,
@@ -730,6 +753,21 @@ private fun MonitoringSummaryCard(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color.Gray,
                             )
+                            Spacer(Modifier.height(8.dp))
+                            TabRow(selectedTabIndex = controllerTabIndex) {
+                                Tab(
+                                    selected = controllerTabIndex == 0,
+                                    onClick = { controllerTabIndex = 0 },
+                                    text = { Text("Settings") },
+                                )
+                                Tab(
+                                    selected = controllerTabIndex == 1,
+                                    onClick = { controllerTabIndex = 1 },
+                                    text = { Text("Game Mode") },
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            if (controllerTabIndex == 0) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -914,6 +952,172 @@ private fun MonitoringSummaryCard(
                                         },
                                     ) {
                                         Text("Set")
+                                    }
+                                }
+                            }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "Game Mode",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Switch(
+                                            checked = globalGameModeEnabled,
+                                            onCheckedChange = { checked -> globalGameModeEnabled = checked },
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            controllerTargetDevices.forEach { device ->
+                                                onSetGameModeEnabled(device.id, globalGameModeEnabled)
+                                            }
+                                        },
+                                    ) {
+                                        Text("Set All")
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "Limit ${globalGameModeLimitMillis} ms",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    OutlinedButton(onClick = {
+                                        globalGameModeLimitMillis = (globalGameModeLimitMillis - 250L).coerceAtLeast(250L)
+                                    }) {
+                                        Text("-")
+                                    }
+                                    OutlinedButton(onClick = { globalGameModeLimitMillis += 250L }) {
+                                        Text("+")
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            controllerTargetDevices.forEach { device ->
+                                                onSetGameModeLimit(device.id, globalGameModeLimitMillis)
+                                            }
+                                        },
+                                    ) {
+                                        Text("Set All")
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    ExposedDropdownMenuBox(
+                                        expanded = globalGameModeLivesMenuExpanded,
+                                        onExpandedChange = { globalGameModeLivesMenuExpanded = it },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        OutlinedTextField(
+                                            value = globalGameModeLives.toString(),
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("Lives All") },
+                                            singleLine = true,
+                                            trailingIcon = {
+                                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = globalGameModeLivesMenuExpanded)
+                                            },
+                                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                        )
+                                        DropdownMenu(
+                                            expanded = globalGameModeLivesMenuExpanded,
+                                            onDismissRequest = { globalGameModeLivesMenuExpanded = false },
+                                        ) {
+                                            (1..10).forEach { lives ->
+                                                DropdownMenuItem(
+                                                    text = { Text(lives.toString()) },
+                                                    onClick = {
+                                                        globalGameModeLives = lives
+                                                        globalGameModeLivesMenuExpanded = false
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            controllerTargetDevices.forEach { device ->
+                                                onSetGameModeLives(device.id, globalGameModeLives)
+                                            }
+                                        },
+                                    ) {
+                                        Text("Set All")
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(Color(0xFFB0A9BB)),
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                controllerTargetDevices.forEach { device ->
+                                    val selectedLives = controllerGameLivesInputs[device.id] ?: 10
+                                    val livesExpanded = controllerGameLivesMenusExpanded[device.id] == true
+                                    Text(
+                                        text = device.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        ExposedDropdownMenuBox(
+                                            expanded = livesExpanded,
+                                            onExpandedChange = { next ->
+                                                controllerGameLivesMenusExpanded[device.id] = next
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            OutlinedTextField(
+                                                value = selectedLives.toString(),
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text("Lives") },
+                                                singleLine = true,
+                                                trailingIcon = {
+                                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = livesExpanded)
+                                                },
+                                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                            )
+                                            DropdownMenu(
+                                                expanded = livesExpanded,
+                                                onDismissRequest = { controllerGameLivesMenusExpanded[device.id] = false },
+                                            ) {
+                                                (1..10).forEach { lives ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(lives.toString()) },
+                                                        onClick = {
+                                                            controllerGameLivesInputs[device.id] = lives
+                                                            controllerGameLivesMenusExpanded[device.id] = false
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        OutlinedButton(onClick = { onSetGameModeLives(device.id, selectedLives) }) {
+                                            Text("Set")
+                                        }
                                     }
                                 }
                             }
@@ -1448,6 +1652,25 @@ private fun DisplayResultPanel(
                 softWrap = false,
                 modifier = Modifier.alpha(lapTextAlpha),
             )
+            if (row.showLives) {
+                val heartSize = displayHeartSizeForLives(
+                    currentLives = row.currentLives,
+                    maxLives = row.maxLives,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    repeat(row.currentLives.coerceAtLeast(0)) {
+                        Image(
+                            painter = painterResource(id = R.drawable.heart_svgrepo_com),
+                            contentDescription = "Life",
+                            modifier = Modifier.size(heartSize),
+                        )
+                    }
+                }
+            }
             row.limitLabel?.let { label ->
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -1458,6 +1681,17 @@ private fun DisplayResultPanel(
                 )
             }
         }
+    }
+}
+
+private fun displayHeartSizeForLives(currentLives: Int, maxLives: Int): Dp {
+    val clampedMax = maxLives.coerceAtLeast(1)
+    val clampedCurrent = currentLives.coerceIn(0, clampedMax)
+    return when {
+        clampedCurrent <= 3 -> 72.dp
+        clampedCurrent <= 5 -> 62.dp
+        clampedCurrent <= 7 -> 52.dp
+        else -> 42.dp
     }
 }
 

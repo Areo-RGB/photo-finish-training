@@ -1,9 +1,9 @@
 package com.paul.sprintsync
 
-import com.paul.sprintsync.features.race_session.SessionOperatingMode
-import com.paul.sprintsync.features.race_session.SessionDeviceRole
-import com.paul.sprintsync.features.race_session.SessionNetworkRole
-import com.paul.sprintsync.features.race_session.SessionStage
+import com.paul.sprintsync.feature.race.domain.SessionOperatingMode
+import com.paul.sprintsync.feature.race.domain.SessionDeviceRole
+import com.paul.sprintsync.feature.race.domain.SessionNetworkRole
+import com.paul.sprintsync.feature.race.domain.SessionStage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -565,6 +565,73 @@ class MainActivityMonitoringLogicTest {
         assertEquals(true, rows[0].isOverLimit)
         assertEquals(false, rows[1].isOverLimit)
         assertEquals("Limit 30000 ms", rows[0].limitLabel)
+    }
+
+    @Test
+    fun `display rows include game mode lives with default limit label`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
+            elapsedByEndpointId = mapOf("ep-1" to 2_000_000_000L),
+            limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to true),
+            gameModeConfiguredLivesByEndpointId = mapOf("ep-1" to 8),
+            gameModeCurrentLivesByEndpointId = mapOf("ep-1" to 6),
+            hostStartSensorNanos = null,
+            hostStopSensorNanos = null,
+            monitoringActive = false,
+            nowSensorNanos = 0L,
+        )
+
+        assertEquals(1, rows.size)
+        assertTrue(rows[0].showLives)
+        assertEquals(6, rows[0].currentLives)
+        assertEquals(8, rows[0].maxLives)
+        assertEquals("Limit 5000 ms", rows[0].limitLabel)
+    }
+
+    @Test
+    fun `compute next game mode lives decrements once and floors at zero`() {
+        assertEquals(
+            4,
+            computeNextGameModeLives(
+                gameModeEnabled = true,
+                currentLives = 5,
+                maxLives = 10,
+                elapsedNanos = 5_500_000_000L,
+                limitMillis = 5_000L,
+            ),
+        )
+        assertEquals(
+            0,
+            computeNextGameModeLives(
+                gameModeEnabled = true,
+                currentLives = 0,
+                maxLives = 10,
+                elapsedNanos = 9_000_000_000L,
+                limitMillis = 5_000L,
+            ),
+        )
+        assertEquals(
+            5,
+            computeNextGameModeLives(
+                gameModeEnabled = true,
+                currentLives = 5,
+                maxLives = 10,
+                elapsedNanos = 4_900_000_000L,
+                limitMillis = 5_000L,
+            ),
+        )
+        assertEquals(
+            5,
+            computeNextGameModeLives(
+                gameModeEnabled = false,
+                currentLives = 5,
+                maxLives = 10,
+                elapsedNanos = 9_000_000_000L,
+                limitMillis = 5_000L,
+            ),
+        )
     }
 
     @Test
