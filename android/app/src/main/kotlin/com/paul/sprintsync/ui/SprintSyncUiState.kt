@@ -1,0 +1,71 @@
+package com.paul.sprintsync
+
+import com.paul.sprintsync.feature.race.domain.SessionDevice
+import com.paul.sprintsync.feature.race.domain.SessionDeviceRole
+import com.paul.sprintsync.feature.race.domain.SessionNetworkRole
+import com.paul.sprintsync.feature.race.domain.SessionOperatingMode
+import com.paul.sprintsync.feature.race.domain.SessionStage
+
+data class SprintSyncUiState(
+    val permissionGranted: Boolean = false,
+    val setupBusy: Boolean = false,
+    val deniedPermissions: List<String> = emptyList(),
+    val stage: SessionStage = SessionStage.SETUP,
+    val networkRole: SessionNetworkRole = SessionNetworkRole.NONE,
+    val networkSummary: String = "Ready",
+    val monitoringSummary: String = "Idle",
+    val clockSummary: String = "Unlocked",
+    val sessionSummary: String = "setup",
+    val startedSensorNanos: Long? = null,
+    val stoppedSensorNanos: Long? = null,
+    val discoveredEndpoints: Map<String, String> = emptyMap(),
+    val connectedEndpoints: Set<String> = emptySet(),
+    val devices: List<SessionDevice> = emptyList(),
+    val canStartMonitoring: Boolean = false,
+    val isHost: Boolean = false,
+    val localRole: SessionDeviceRole = SessionDeviceRole.UNASSIGNED,
+    val userMonitoringEnabled: Boolean = true,
+    val monitoringConnectionTypeLabel: String = "-",
+    val hasConnectedPeers: Boolean = false,
+    val wifiWarningText: String? = null,
+    val runStatusLabel: String = "Ready",
+    val runMarksCount: Int = 0,
+    val elapsedDisplay: String = "00.00",
+    val threshold: Double = 0.006,
+    val roiCenterX: Double = 0.5,
+    val roiWidth: Double = 0.06,
+    val cooldownMs: Int = 900,
+    val processEveryNFrames: Int = 1,
+    val observedFps: Double? = null,
+    val cameraFpsModeLabel: String = "INIT",
+    val targetFpsUpper: Int? = null,
+    val rawScore: Double? = null,
+    val baseline: Double? = null,
+    val effectiveScore: Double? = null,
+    val frameSensorNanos: Long? = null,
+    val streamFrameCount: Long = 0,
+    val processedFrameCount: Long = 0,
+    val triggerHistory: List<String> = emptyList(),
+    val splitHistory: List<String> = emptyList(),
+    val lastNearbyEvent: String? = null,
+    val lastSensorEvent: String? = null,
+    val recentEvents: List<String> = emptyList(),
+    val operatingMode: SessionOperatingMode = SessionOperatingMode.SINGLE_DEVICE,
+    val displayLapRows: List<DisplayLapRow> = emptyList(),
+    val displayConnectedHostName: String? = null,
+    val displayConnectedHostEndpointId: String? = null,
+    val displayDiscoveryActive: Boolean = false,
+    val controllerTargetEndpoints: Map<String, String> = emptyMap(),
+)
+
+data class DisplayLapRow(
+    val deviceName: String,
+    val lapTimeLabel: String,
+    val limitLabel: String? = null,
+    val isOverLimit: Boolean = false,
+    val isUnderLimit: Boolean = false,
+    val isWaiting: Boolean = false,
+    val showLives: Boolean = false,
+    val currentLives: Int = 0,
+    val maxLives: Int = 10,
+)
