@@ -161,249 +161,221 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     previewViewFactory = previewViewFactory,
                     setupActionProfile = setupActionProfile,
                     runtimeDeviceConfig = runtimeDeviceConfig,
-                    onRequestPermissions = {
-                        if (uiState.value.setupBusy) return@SprintSyncApp
-                        setSetupBusy(true)
-                        requestPermissionsIfNeeded(PermissionScope.NETWORK_ONLY) {
-                            setSetupBusy(false)
-                        }
-                    },
-                    onStartSingleDevice = {
-                        if (setupActionProfile == SetupActionProfile.CONTROLLER_ONLY) {
-                            startControllerMode(enableAutoDisplayReconnect = true)
-                        } else {
-                            startSingleDeviceMode(enableAutoDisplayReconnect = true)
-                        }
-                    },
-                    onStartDisplayHost = { startDisplayHostMode() },
-                    onStartMonitoring = {
-                        requestPermissionsIfNeeded(PermissionScope.CAMERA_AND_NETWORK) {
-                            raceSessionController.startSingleDeviceMonitoring()
-                            userMonitoringEnabled = true
+                    onAction = ::onMainAction,
+                )
+            }
+        }
+        maybeAutoStartRuntimeMode()
+    }
 
-                            logRuntimeDiagnostic(
-                                "startMonitoring requested: started=true role=${raceSessionController.localDeviceRole().name} " +
-                                    "shouldRunLocal=${shouldRunLocalMonitoring()} resumed=$isAppResumed",
-                            )
-                            syncControllerSummaries()
-                        }
-                    },
-                    onStartDisplayDiscovery = { startDisplayDiscovery(errorPrefix = "display discovery") },
-                    onConnectDisplayHost = { endpointId ->
-                        try {
-                            connectionsManager.requestConnection(
-                                endpointId = endpointId,
-                                endpointName = localEndpointName(),
-                            ) { result ->
-                                result.exceptionOrNull()?.let { error ->
-                                    appendEvent("display connect error: ${error.localizedMessage ?: "unknown"}")
-                                }
-                                syncControllerSummaries()
-                            }
-                        } catch (error: Throwable) {
+    private fun onMainAction(action: MainAction) {
+        when (action) {
+            MainAction.RequestPermissions -> {
+                if (uiState.value.setupBusy) return
+                setSetupBusy(true)
+                requestPermissionsIfNeeded(PermissionScope.NETWORK_ONLY) {
+                    setSetupBusy(false)
+                }
+            }
+            MainAction.StartSingleDevice -> {
+                if (setupActionProfile == SetupActionProfile.CONTROLLER_ONLY) {
+                    startControllerMode(enableAutoDisplayReconnect = true)
+                } else {
+                    startSingleDeviceMode(enableAutoDisplayReconnect = true)
+                }
+            }
+            MainAction.StartDisplayHost -> startDisplayHostMode()
+            MainAction.StartDisplayDiscovery -> startDisplayDiscovery(errorPrefix = "display discovery")
+            is MainAction.ConnectDisplayHost -> {
+                try {
+                    connectionsManager.requestConnection(
+                        endpointId = action.endpointId,
+                        endpointName = localEndpointName(),
+                    ) { result ->
+                        result.exceptionOrNull()?.let { error ->
                             appendEvent("display connect error: ${error.localizedMessage ?: "unknown"}")
-                            syncControllerSummaries()
-                        }
-                    },
-                    onResetDeviceTimer = { targetEndpointId ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.RESET_TIMER,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = null,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = null,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetDisplayLimit = { targetEndpointId, limitMillis ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_DISPLAY_LIMIT,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = limitMillis,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = null,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = null,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetAutoReadyDelay = { targetEndpointId, autoReadyDelaySeconds ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_AUTO_READY_DELAY,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = autoReadyDelaySeconds,
-                            waitTextEnabled = null,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = null,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetWaitTextEnabled = { targetEndpointId, enabled ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_WAIT_TEXT_MODE,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = enabled,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = null,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetDeviceSensitivity = { targetEndpointId, sensitivityPercent ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_MOTION_SENSITIVITY,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = sensitivityPercent,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = null,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = null,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetGameModeEnabled = { targetEndpointId, enabled ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_GAME_MODE_ENABLED,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = null,
-                            gameModeEnabled = enabled,
-                            gameModeLimitMillis = null,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetGameModeLimit = { targetEndpointId, limitMillis ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_GAME_MODE_LIMIT,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = null,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = limitMillis,
-                            gameModeLives = null,
-                        )
-                    },
-                    onSetGameModeLives = { targetEndpointId, lives ->
-                        sendControllerCommandToDisplayHost(
-                            action = SessionControlAction.SET_GAME_MODE_LIVES,
-                            targetEndpointId = targetEndpointId,
-                            limitMillis = null,
-                            sensitivityPercent = null,
-                            autoReadyDelaySeconds = null,
-                            waitTextEnabled = null,
-                            gameModeEnabled = null,
-                            gameModeLimitMillis = null,
-                            gameModeLives = lives,
-                        )
-                    },
-                    onSetMonitoringEnabled = { enabled ->
-                        userMonitoringEnabled = enabled
-                        if (!enabled) {
-                            localCaptureStartPending = false
-                            motionDetectionController.stopMonitoring()
                         }
                         syncControllerSummaries()
-                    },
-                    onStopMonitoring = {
-                        logRuntimeDiagnostic("stopMonitoring requested")
-                        when (uiState.value.operatingMode) {
-                            SessionOperatingMode.SINGLE_DEVICE -> {
-                                raceSessionController.stopSingleDeviceMonitoring()
-                                stopAutoDisplayReconnectLoop()
-                                connectionsManager.stopAll()
-                                clearDisplayRelayReconnectionState()
-                                displayDiscoveryActive = false
-                                displayConnectedHostEndpointId = null
-                                displayConnectedHostName = null
-                                displayDiscoveredHosts.clear()
-                                controllerTargetDeviceNamesByEndpointId.clear()
-                            }
-                            SessionOperatingMode.DISPLAY_HOST -> {
-                                raceSessionController.stopDisplayHostMode()
-                                stopAutoDisplayReconnectLoop()
-                                connectionsManager.stopAll()
-                                clearDisplayRelayReconnectionState()
-                                clearDisplayHostLapState()
-                                controllerTargetDeviceNamesByEndpointId.clear()
-                            }
-                        }
-                        syncControllerSummaries()
-                    },
-                    onResetRun = {
-                        raceSessionController.resetRun()
-                        syncControllerSummaries()
-                    },
-                    onAssignRole = { _, _ -> Unit },
-                    onAssignCameraFacing = { deviceId, facing ->
-                        raceSessionController.assignCameraFacing(deviceId, facing)
-                        if (
-                            shouldApplyLiveLocalCameraFacingUpdate(
-                                isLocalMotionMonitoring = motionDetectionController.uiState.value.monitoring,
-                                assignedDeviceId = deviceId,
-                                localDeviceId = localDeviceId(),
-                            )
-                        ) {
-                            applyLocalMonitoringConfigFromSession()
-                        }
-                        syncControllerSummaries()
-                    },
-                    onUpdateThreshold = { value ->
-                        motionDetectionController.updateThreshold(value)
-                        syncControllerSummaries()
-                    },
-                    onUpdateRoiCenter = { value ->
-                        motionDetectionController.updateRoiCenter(value)
-                        syncControllerSummaries()
-                    },
-                    onUpdateRoiWidth = { value ->
-                        motionDetectionController.updateRoiWidth(value)
-                        syncControllerSummaries()
-                    },
-                    onUpdateCooldown = { value ->
-                        motionDetectionController.updateCooldown(value)
-                        syncControllerSummaries()
-                    },
-                    onStopHosting = {
-                        if (uiState.value.operatingMode == SessionOperatingMode.DISPLAY_HOST) {
-                            raceSessionController.stopDisplayHostMode()
-                            clearDisplayHostLapState()
-                        } else {
-                            raceSessionController.stopSingleDeviceMonitoring()
-                        }
+                    }
+                } catch (error: Throwable) {
+                    appendEvent("display connect error: ${error.localizedMessage ?: "unknown"}")
+                    syncControllerSummaries()
+                }
+            }
+            is MainAction.ResetDeviceTimer -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.RESET_TIMER,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetDisplayLimit -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_DISPLAY_LIMIT,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = action.limitMillis,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetAutoReadyDelay -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_AUTO_READY_DELAY,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = action.autoReadyDelaySeconds,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetWaitTextEnabled -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_WAIT_TEXT_MODE,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = action.enabled,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetDeviceSensitivity -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_MOTION_SENSITIVITY,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = action.sensitivityPercent,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetGameModeEnabled -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_GAME_MODE_ENABLED,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = action.enabled,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetGameModeLimit -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_GAME_MODE_LIMIT,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = action.limitMillis,
+                    gameModeLives = null,
+                )
+            }
+            is MainAction.SetGameModeLives -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.SET_GAME_MODE_LIVES,
+                    targetEndpointId = action.endpointId,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = action.lives,
+                )
+            }
+            is MainAction.SetMonitoringEnabled -> {
+                userMonitoringEnabled = action.enabled
+                if (!action.enabled) {
+                    localCaptureStartPending = false
+                    motionDetectionController.stopMonitoring()
+                }
+                syncControllerSummaries()
+            }
+            MainAction.StopMonitoring -> {
+                logRuntimeDiagnostic("stopMonitoring requested")
+                when (uiState.value.operatingMode) {
+                    SessionOperatingMode.SINGLE_DEVICE -> {
+                        raceSessionController.stopSingleDeviceMonitoring()
                         stopAutoDisplayReconnectLoop()
                         connectionsManager.stopAll()
-                        if (motionDetectionController.uiState.value.monitoring) {
-                            motionDetectionController.stopMonitoring()
-                        }
+                        clearDisplayRelayReconnectionState()
                         displayDiscoveryActive = false
                         displayConnectedHostEndpointId = null
                         displayConnectedHostName = null
                         displayDiscoveredHosts.clear()
                         controllerTargetDeviceNamesByEndpointId.clear()
-                        updateUiState { copy(networkSummary = "Stopped") }
-                        appendEvent("hosting stopped")
-                        syncControllerSummaries()
-                    },
-                    onOpenWifiSettings = {
-                        startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
-                    },
-                )
+                    }
+                    SessionOperatingMode.DISPLAY_HOST -> {
+                        raceSessionController.stopDisplayHostMode()
+                        stopAutoDisplayReconnectLoop()
+                        connectionsManager.stopAll()
+                        clearDisplayRelayReconnectionState()
+                        clearDisplayHostLapState()
+                        controllerTargetDeviceNamesByEndpointId.clear()
+                    }
+                }
+                syncControllerSummaries()
+            }
+            MainAction.ResetRun -> {
+                raceSessionController.resetRun()
+                syncControllerSummaries()
+            }
+            is MainAction.AssignCameraFacing -> {
+                raceSessionController.assignCameraFacing(action.deviceId, action.facing)
+                if (
+                    shouldApplyLiveLocalCameraFacingUpdate(
+                        isLocalMotionMonitoring = motionDetectionController.uiState.value.monitoring,
+                        assignedDeviceId = action.deviceId,
+                        localDeviceId = localDeviceId(),
+                    )
+                ) {
+                    applyLocalMonitoringConfigFromSession()
+                }
+                syncControllerSummaries()
+            }
+            is MainAction.UpdateThreshold -> {
+                motionDetectionController.updateThreshold(action.value)
+                syncControllerSummaries()
+            }
+            is MainAction.UpdateRoiCenter -> {
+                motionDetectionController.updateRoiCenter(action.value)
+                syncControllerSummaries()
+            }
+            is MainAction.UpdateRoiWidth -> {
+                motionDetectionController.updateRoiWidth(action.value)
+                syncControllerSummaries()
+            }
+            is MainAction.UpdateCooldown -> {
+                motionDetectionController.updateCooldown(action.value)
+                syncControllerSummaries()
+            }
+            MainAction.OpenWifiSettings -> {
+                startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
             }
         }
-        maybeAutoStartRuntimeMode()
     }
 
     override fun onPause() {

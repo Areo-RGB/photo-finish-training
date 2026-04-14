@@ -42,31 +42,7 @@ fun SprintSyncApp(
     setupActionProfile: SetupActionProfile = SetupActionProfile.SINGLE_ONLY,
     runtimeDeviceConfig: com.paul.sprintsync.core.RuntimeDeviceConfig =
         com.paul.sprintsync.core.RuntimeDeviceConfig(),
-    onRequestPermissions: () -> Unit,
-    onStartSingleDevice: () -> Unit,
-    onStartDisplayHost: () -> Unit,
-    onStartMonitoring: () -> Unit,
-    onStartDisplayDiscovery: () -> Unit,
-    onConnectDisplayHost: (String) -> Unit,
-    onResetDeviceTimer: (String) -> Unit,
-    onSetDisplayLimit: (String, Long) -> Unit,
-    onSetAutoReadyDelay: (String, Int?) -> Unit,
-    onSetWaitTextEnabled: (String, Boolean) -> Unit,
-    onSetDeviceSensitivity: (String, Int) -> Unit,
-    onSetGameModeEnabled: (String, Boolean) -> Unit,
-    onSetGameModeLimit: (String, Long) -> Unit,
-    onSetGameModeLives: (String, Int) -> Unit,
-    onSetMonitoringEnabled: (Boolean) -> Unit,
-    onStopMonitoring: () -> Unit,
-    onResetRun: () -> Unit,
-    onAssignRole: (String, SessionDeviceRole) -> Unit,
-    onAssignCameraFacing: (String, SessionCameraFacing) -> Unit,
-    onUpdateThreshold: (Double) -> Unit,
-    onUpdateRoiCenter: (Double) -> Unit,
-    onUpdateRoiWidth: (Double) -> Unit,
-    onUpdateCooldown: (Int) -> Unit,
-    onStopHosting: () -> Unit,
-    onOpenWifiSettings: () -> Unit,
+    onAction: (MainAction) -> Unit,
 ) {
     var showPreview by rememberSaveable { mutableStateOf(true) }
     var showDebugInfo by rememberSaveable { mutableStateOf(false) }
@@ -135,7 +111,7 @@ fun SprintSyncApp(
                                 uiState.stage == SessionStage.MONITORING &&
                                 uiState.isHost
                             ) {
-                                SecondaryButton(text = "Stop", onClick = onStopMonitoring)
+                                SecondaryButton(text = "Stop", onClick = { onAction(MainAction.StopMonitoring) })
                             }
                             if (shouldShowDebugToggle(debugViewEnabled)) {
                                 TextButton(onClick = { showDebugInfo = !showDebugInfo }) {
@@ -161,7 +137,7 @@ fun SprintSyncApp(
                 item {
                     WifiWarningCard(
                         text = uiState.wifiWarningText,
-                        onClick = onOpenWifiSettings,
+                        onClick = { onAction(MainAction.OpenWifiSettings) },
                     )
                 }
             }
@@ -178,9 +154,9 @@ fun SprintSyncApp(
                             setupActionProfile = setupActionProfile,
                             permissionGranted = uiState.permissionGranted,
                             setupBusy = uiState.setupBusy,
-                            onRequestPermissions = onRequestPermissions,
-                            onStartSingleDevice = onStartSingleDevice,
-                            onStartDisplayHost = onStartDisplayHost,
+                            onRequestPermissions = { onAction(MainAction.RequestPermissions) },
+                            onStartSingleDevice = { onAction(MainAction.StartSingleDevice) },
+                            onStartDisplayHost = { onAction(MainAction.StartDisplayHost) },
                         )
                     }
                     item {
@@ -220,7 +196,7 @@ fun SprintSyncApp(
                                 RunMetricsCard(
                                     uiState = uiState,
                                     isHost = uiState.isHost,
-                                    onResetRun = onResetRun,
+                                    onResetRun = { onAction(MainAction.ResetRun) },
                                 )
                             }
                         }
@@ -233,10 +209,12 @@ fun SprintSyncApp(
                                 showDebugInfo = showDebugInfo,
                                 connectionTypeLabel = uiState.monitoringConnectionTypeLabel,
                                 userMonitoringEnabled = uiState.userMonitoringEnabled,
-                                onSetMonitoringEnabled = onSetMonitoringEnabled,
+                                onSetMonitoringEnabled = { enabled ->
+                                    onAction(MainAction.SetMonitoringEnabled(enabled))
+                                },
                                 onAssignLocalCameraFacing = { facing ->
                                     localDevice?.let { device ->
-                                        onAssignCameraFacing(device.id, facing)
+                                        onAction(MainAction.AssignCameraFacing(device.id, facing))
                                     }
                                 },
                                 effectiveShowPreview = effectiveShowPreview,
@@ -251,27 +229,45 @@ fun SprintSyncApp(
                                 discoveredDisplayHosts = uiState.discoveredEndpoints,
                                 displayConnectedHostName = uiState.displayConnectedHostName,
                                 displayDiscoveryActive = uiState.displayDiscoveryActive,
-                                onStartDisplayDiscovery = onStartDisplayDiscovery,
-                                onConnectDisplayHost = onConnectDisplayHost,
-                                onResetDeviceTimer = onResetDeviceTimer,
-                                onSetDisplayLimit = onSetDisplayLimit,
-                                onSetAutoReadyDelay = onSetAutoReadyDelay,
-                                onSetWaitTextEnabled = onSetWaitTextEnabled,
-                                onSetDeviceSensitivity = onSetDeviceSensitivity,
-                                onSetGameModeEnabled = onSetGameModeEnabled,
-                                onSetGameModeLimit = onSetGameModeLimit,
-                                onSetGameModeLives = onSetGameModeLives,
-                                onResetRun = onResetRun,
+                                onStartDisplayDiscovery = { onAction(MainAction.StartDisplayDiscovery) },
+                                onConnectDisplayHost = { endpointId ->
+                                    onAction(MainAction.ConnectDisplayHost(endpointId))
+                                },
+                                onResetDeviceTimer = { endpointId ->
+                                    onAction(MainAction.ResetDeviceTimer(endpointId))
+                                },
+                                onSetDisplayLimit = { endpointId, limitMillis ->
+                                    onAction(MainAction.SetDisplayLimit(endpointId, limitMillis))
+                                },
+                                onSetAutoReadyDelay = { endpointId, autoReadyDelaySeconds ->
+                                    onAction(MainAction.SetAutoReadyDelay(endpointId, autoReadyDelaySeconds))
+                                },
+                                onSetWaitTextEnabled = { endpointId, enabled ->
+                                    onAction(MainAction.SetWaitTextEnabled(endpointId, enabled))
+                                },
+                                onSetDeviceSensitivity = { endpointId, sensitivityPercent ->
+                                    onAction(MainAction.SetDeviceSensitivity(endpointId, sensitivityPercent))
+                                },
+                                onSetGameModeEnabled = { endpointId, enabled ->
+                                    onAction(MainAction.SetGameModeEnabled(endpointId, enabled))
+                                },
+                                onSetGameModeLimit = { endpointId, limitMillis ->
+                                    onAction(MainAction.SetGameModeLimit(endpointId, limitMillis))
+                                },
+                                onSetGameModeLives = { endpointId, lives ->
+                                    onAction(MainAction.SetGameModeLives(endpointId, lives))
+                                },
+                                onResetRun = { onAction(MainAction.ResetRun) },
                             )
                         }
                         if (showDebugInfo && setupActionProfile != SetupActionProfile.CONTROLLER_ONLY) {
                             item {
                                 AdvancedDetectionCard(
                                     uiState = uiState,
-                                    onUpdateThreshold = onUpdateThreshold,
-                                    onUpdateRoiCenter = onUpdateRoiCenter,
-                                    onUpdateRoiWidth = onUpdateRoiWidth,
-                                    onUpdateCooldown = onUpdateCooldown,
+                                    onUpdateThreshold = { onAction(MainAction.UpdateThreshold(it)) },
+                                    onUpdateRoiCenter = { onAction(MainAction.UpdateRoiCenter(it)) },
+                                    onUpdateRoiWidth = { onAction(MainAction.UpdateRoiWidth(it)) },
+                                    onUpdateCooldown = { onAction(MainAction.UpdateCooldown(it)) },
                                 )
                             }
                         }
@@ -300,7 +296,7 @@ fun SprintSyncApp(
 
             if (isDisplayHostMode) {
                 OutlinedButton(
-                    onClick = onStopMonitoring,
+                    onClick = { onAction(MainAction.StopMonitoring) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 20.dp, end = 20.dp),
