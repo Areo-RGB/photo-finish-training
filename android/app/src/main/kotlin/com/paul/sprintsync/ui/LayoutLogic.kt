@@ -12,6 +12,11 @@ import com.paul.sprintsync.feature.race.domain.SessionStage
 internal fun shouldShowSetupPermissionWarning(permissionGranted: Boolean, deniedPermissions: List<String>): Boolean =
     !permissionGranted && deniedPermissions.isNotEmpty()
 
+internal fun shouldShowUpdateDownloadingOverlay(updateDownloading: Boolean): Boolean = updateDownloading
+
+internal fun formatAppVersionLabel(versionName: String, versionCode: Int): String =
+    "v$versionName ($versionCode)"
+
 enum class SetupActionProfile {
     SINGLE_ONLY,
     DISPLAY_ONLY,

@@ -31,6 +31,11 @@ android {
         buildConfigField("boolean", "TCP_ONLY", "false")
         buildConfigField("String", "TCP_HOST_IP", "\"192.168.0.103\"")
         buildConfigField("int", "TCP_HOST_PORT", "9000")
+        buildConfigField(
+            "String",
+            "UPDATE_CHECK_URL",
+            "\"https://api.github.com/repos/Areo-RGB/photo-finish-training/releases/latest\"",
+        )
         buildConfigField("boolean", "HOST_CONTROLLER_ONLY", "false")
         resValue("string", "app_name", "training.variant")
     }

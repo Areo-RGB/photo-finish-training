@@ -210,6 +210,17 @@ class SprintSyncAppLayoutLogicTest {
     }
 
     @Test
+    fun `update overlay follows update downloading flag`() {
+        assertTrue(shouldShowUpdateDownloadingOverlay(updateDownloading = true))
+        assertFalse(shouldShowUpdateDownloadingOverlay(updateDownloading = false))
+    }
+
+    @Test
+    fun `app version label formats name and code`() {
+        assertEquals("v1.2.3 (45)", formatAppVersionLabel("1.2.3", 45))
+    }
+
+    @Test
     fun `display layout uses expected size tiers by row count`() {
         val one = displayLayoutSpecForCount(1)
         val two = displayLayoutSpecForCount(2)

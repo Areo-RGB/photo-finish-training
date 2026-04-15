@@ -58,6 +58,7 @@ data class SprintSyncUiState(
     val displayConnectedHostEndpointId: String? = null,
     val displayDiscoveryActive: Boolean = false,
     val controllerTargetEndpoints: Map<String, String> = emptyMap(),
+    val updateDownloading: Boolean = false,
 )
 
 data class DisplayLapRow(

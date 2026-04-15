@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.paul.sprintsync.core.ui.components.PrimaryButton
 import com.paul.sprintsync.core.ui.components.SectionHeader
@@ -101,6 +102,26 @@ internal fun ConnectedDevicesListCard(devices: List<SessionDevice>, showDebugInf
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun AppVersionCard() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = "App Version",
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.Gray,
+        )
+        Text(
+            text = formatAppVersionLabel(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

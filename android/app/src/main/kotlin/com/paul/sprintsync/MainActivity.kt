@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.paul.sprintsync.core.common.AppUpdateChecker
 import com.paul.sprintsync.core.repositories.LocalRepository
 import com.paul.sprintsync.core.services.NearbyEvent
 import com.paul.sprintsync.core.services.NearbyTransportStrategy
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private lateinit var connectionsManager: SessionConnectionsManager
     private lateinit var motionDetectionController: MotionDetectionController
     private lateinit var raceSessionController: RaceSessionController
+    private lateinit var appUpdateChecker: AppUpdateChecker
     private lateinit var previewViewFactory: SensorNativePreviewViewFactory
     private val uiState = mutableStateOf(SprintSyncUiState())
     private var pendingPermissionAction: (() -> Unit)? = null
@@ -130,6 +132,21 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         sensorNativeController = SensorNativeController(this)
+        appUpdateChecker = AppUpdateChecker(this)
+        lifecycleScope.launch {
+            val update = appUpdateChecker.checkForUpdate(
+                updateCheckUrl = BuildConfig.UPDATE_CHECK_URL,
+                currentVersionCode = BuildConfig.VERSION_CODE,
+            )
+            if (update != null) {
+                updateUiState { copy(updateDownloading = true) }
+                val success = appUpdateChecker.downloadAndInstall(update.apkUrl)
+                updateUiState { copy(updateDownloading = false) }
+                if (!success) {
+                    appendEvent("Update download failed")
+                }
+            }
+        }
         val localRepository = LocalRepository(this)
         val nsdDiscovery = NsdServiceDiscovery(this)
         connectionsManager = TcpConnectionsManager(
