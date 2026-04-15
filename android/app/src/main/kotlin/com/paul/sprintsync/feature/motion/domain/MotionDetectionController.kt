@@ -161,7 +161,6 @@ class MotionDetectionController(
             cooldownMs = cooldownMs,
             processEveryNFrames = processEveryNFrames,
             cameraFacing = nativeFacing,
-            highSpeedEnabled = false,
         )
     }
 }
