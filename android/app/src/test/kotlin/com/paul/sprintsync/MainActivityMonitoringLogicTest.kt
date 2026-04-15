@@ -635,6 +635,42 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
+    fun `game mode auto limit increments run count without reducing before threshold`() {
+        val advanced = advanceGameModeAutoLimit(
+            currentRunCount = 3,
+            everyRuns = 10,
+            currentLimitMillis = 5_000L,
+        )
+
+        assertEquals(4, advanced.nextRunCount)
+        assertEquals(5_000L, advanced.nextLimitMillis)
+    }
+
+    @Test
+    fun `game mode auto limit reduces by 100 ms at threshold and resets counter`() {
+        val advanced = advanceGameModeAutoLimit(
+            currentRunCount = 9,
+            everyRuns = 10,
+            currentLimitMillis = 5_000L,
+        )
+
+        assertEquals(0, advanced.nextRunCount)
+        assertEquals(4_900L, advanced.nextLimitMillis)
+    }
+
+    @Test
+    fun `game mode auto limit clamps to minimum 100 ms`() {
+        val advanced = advanceGameModeAutoLimit(
+            currentRunCount = 0,
+            everyRuns = 1,
+            currentLimitMillis = 120L,
+        )
+
+        assertEquals(0, advanced.nextRunCount)
+        assertEquals(100L, advanced.nextLimitMillis)
+    }
+
+    @Test
     fun `monitoring connection label uses configured tcp host and port when peers connected`() {
         assertEquals(
             "TCP (192.168.0.103:9000)",

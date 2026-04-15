@@ -245,6 +245,38 @@ class RaceSessionModelsTest {
             }
         """.trimIndent()
         assertNull(SessionControlCommandMessage.tryParse(invalidLives))
+
+        val invalidAutoRuns = """
+            {
+              "type": "control_command",
+              "action": "set_game_mode_auto_config",
+              "targetEndpointId": "ep-1",
+              "senderDeviceName": "Controller",
+              "gameModeAutoEnabled": true,
+              "gameModeAutoEveryRuns": 21
+            }
+        """.trimIndent()
+        assertNull(SessionControlCommandMessage.tryParse(invalidAutoRuns))
+    }
+
+    @Test
+    fun `control command accepts game mode auto config`() {
+        val raw = SessionControlCommandMessage(
+            action = SessionControlAction.SET_GAME_MODE_AUTO_CONFIG,
+            targetEndpointId = "ep-1",
+            senderDeviceName = "Controller",
+            limitMillis = null,
+            sensitivityPercent = null,
+            gameModeAutoEnabled = true,
+            gameModeAutoEveryRuns = 10,
+        ).toJsonString()
+
+        val parsed = SessionControlCommandMessage.tryParse(raw)
+
+        assertNotNull(parsed)
+        assertEquals(SessionControlAction.SET_GAME_MODE_AUTO_CONFIG, parsed.action)
+        assertEquals(true, parsed.gameModeAutoEnabled)
+        assertEquals(10, parsed.gameModeAutoEveryRuns)
     }
 
     @Test

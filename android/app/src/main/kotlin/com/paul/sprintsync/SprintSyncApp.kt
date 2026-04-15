@@ -257,6 +257,9 @@ fun SprintSyncApp(
                                 onSetGameModeLives = { endpointId, lives ->
                                     onAction(MainAction.SetGameModeLives(endpointId, lives))
                                 },
+                                onSetGameModeAutoConfig = { endpointId, enabled, everyRuns ->
+                                    onAction(MainAction.SetGameModeAutoConfig(endpointId, enabled, everyRuns))
+                                },
                                 onResetRun = { onAction(MainAction.ResetRun) },
                             )
                         }

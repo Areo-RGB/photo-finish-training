@@ -124,6 +124,7 @@ internal fun MonitoringSummaryCard(
     onSetGameModeEnabled: (String, Boolean) -> Unit,
     onSetGameModeLimit: (String, Long) -> Unit,
     onSetGameModeLives: (String, Int) -> Unit,
+    onSetGameModeAutoConfig: (String, Boolean, Int) -> Unit,
     onResetRun: () -> Unit,
 ) {
     val controllerLimitInputs = remember { mutableStateMapOf<String, String>() }
@@ -136,9 +137,15 @@ internal fun MonitoringSummaryCard(
     var globalGameModeEnabled by rememberSaveable { mutableStateOf(false) }
     var globalGameModeLimitMillis by rememberSaveable { mutableStateOf(5_000L) }
     var globalGameModeLives by rememberSaveable { mutableStateOf(10) }
+    var globalGameModeAutoEnabled by rememberSaveable { mutableStateOf(false) }
+    var globalGameModeAutoEveryRuns by rememberSaveable { mutableStateOf(10) }
     var globalGameModeLivesMenuExpanded by remember { mutableStateOf(false) }
+    var globalGameModeAutoEveryRunsMenuExpanded by remember { mutableStateOf(false) }
     val controllerGameLivesInputs = remember { mutableStateMapOf<String, Int>() }
     val controllerGameLivesMenusExpanded = remember { mutableStateMapOf<String, Boolean>() }
+    val controllerGameAutoEnabledInputs = remember { mutableStateMapOf<String, Boolean>() }
+    val controllerGameAutoEveryRunsInputs = remember { mutableStateMapOf<String, Int>() }
+    val controllerGameAutoEveryRunsMenusExpanded = remember { mutableStateMapOf<String, Boolean>() }
     val globalAutoReadyLabel = globalAutoReadyDelaySeconds?.let { "$it s" } ?: "Manual"
     val controllerTargetDevices = remember(
         setupActionProfile,
@@ -496,6 +503,74 @@ internal fun MonitoringSummaryCard(
                                         Text("Set All")
                                     }
                                 }
+                                if (globalGameModeEnabled) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = "Auto",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            Switch(
+                                                checked = globalGameModeAutoEnabled,
+                                                onCheckedChange = { checked -> globalGameModeAutoEnabled = checked },
+                                            )
+                                        }
+                                        if (globalGameModeAutoEnabled) {
+                                            ExposedDropdownMenuBox(
+                                                expanded = globalGameModeAutoEveryRunsMenuExpanded,
+                                                onExpandedChange = { globalGameModeAutoEveryRunsMenuExpanded = it },
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = globalGameModeAutoEveryRuns.toString(),
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text("Every Runs") },
+                                                    singleLine = true,
+                                                    trailingIcon = {
+                                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                                            expanded = globalGameModeAutoEveryRunsMenuExpanded,
+                                                        )
+                                                    },
+                                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                                )
+                                                DropdownMenu(
+                                                    expanded = globalGameModeAutoEveryRunsMenuExpanded,
+                                                    onDismissRequest = { globalGameModeAutoEveryRunsMenuExpanded = false },
+                                                ) {
+                                                    (1..20).forEach { runs ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(runs.toString()) },
+                                                            onClick = {
+                                                                globalGameModeAutoEveryRuns = runs
+                                                                globalGameModeAutoEveryRunsMenuExpanded = false
+                                                            },
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                val everyRuns = globalGameModeAutoEveryRuns.coerceIn(1, 20)
+                                                controllerTargetDevices.forEach { device ->
+                                                    onSetGameModeAutoConfig(device.id, globalGameModeAutoEnabled, everyRuns)
+                                                }
+                                            },
+                                        ) {
+                                            Text("Set All")
+                                        }
+                                    }
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -584,11 +659,84 @@ internal fun MonitoringSummaryCard(
                                     DeviceControlRow(device = device)
                                     val selectedLives = controllerGameLivesInputs[device.id] ?: 10
                                     val livesExpanded = controllerGameLivesMenusExpanded[device.id] == true
+                                    val autoEnabled = controllerGameAutoEnabledInputs[device.id] == true
+                                    val autoEveryRuns = (controllerGameAutoEveryRunsInputs[device.id] ?: 10).coerceIn(1, 20)
+                                    val autoEveryRunsExpanded =
+                                        controllerGameAutoEveryRunsMenusExpanded[device.id] == true
                                     Text(
                                         text = device.name,
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                     )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = "Auto",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            Switch(
+                                                checked = autoEnabled,
+                                                onCheckedChange = { checked ->
+                                                    controllerGameAutoEnabledInputs[device.id] = checked
+                                                },
+                                            )
+                                        }
+                                        if (autoEnabled) {
+                                            ExposedDropdownMenuBox(
+                                                expanded = autoEveryRunsExpanded,
+                                                onExpandedChange = { next ->
+                                                    controllerGameAutoEveryRunsMenusExpanded[device.id] = next
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = autoEveryRuns.toString(),
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text("Every Runs") },
+                                                    singleLine = true,
+                                                    trailingIcon = {
+                                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                                            expanded = autoEveryRunsExpanded,
+                                                        )
+                                                    },
+                                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                                )
+                                                DropdownMenu(
+                                                    expanded = autoEveryRunsExpanded,
+                                                    onDismissRequest = {
+                                                        controllerGameAutoEveryRunsMenusExpanded[device.id] = false
+                                                    },
+                                                ) {
+                                                    (1..20).forEach { runs ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(runs.toString()) },
+                                                            onClick = {
+                                                                controllerGameAutoEveryRunsInputs[device.id] = runs
+                                                                controllerGameAutoEveryRunsMenusExpanded[device.id] = false
+                                                            },
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                onSetGameModeAutoConfig(device.id, autoEnabled, autoEveryRuns)
+                                            },
+                                        ) {
+                                            Text("Set")
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -980,7 +1128,7 @@ internal fun AdvancedDetectionCard(
                 Slider(
                     value = uiState.roiWidth.toFloat(),
                     onValueChange = { onUpdateRoiWidth(it.toDouble()) },
-                    valueRange = 0.05f..0.40f,
+                    valueRange = 0.01f..0.40f,
                 )
 
                 Text("Cooldown: ${uiState.cooldownMs} ms")

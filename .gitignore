@@ -44,4 +44,7 @@ app.*.map.json
 .serena/
 .seren/
 .serena/memories/
-.agent-work
+.agent-work.dual-graph/
+.dual-graph-context/
+.dual-graph/
+android/mcp.json

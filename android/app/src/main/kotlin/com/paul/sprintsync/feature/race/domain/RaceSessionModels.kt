@@ -144,6 +144,7 @@ enum class SessionControlAction {
     SET_GAME_MODE_ENABLED,
     SET_GAME_MODE_LIMIT,
     SET_GAME_MODE_LIVES,
+    SET_GAME_MODE_AUTO_CONFIG,
 }
 
 data class SessionControlCommandMessage(
@@ -157,6 +158,8 @@ data class SessionControlCommandMessage(
     val gameModeEnabled: Boolean? = null,
     val gameModeLimitMillis: Long? = null,
     val gameModeLives: Int? = null,
+    val gameModeAutoEnabled: Boolean? = null,
+    val gameModeAutoEveryRuns: Int? = null,
 ) {
     fun toJsonString(): String {
         return JSONObject()
@@ -171,6 +174,8 @@ data class SessionControlCommandMessage(
             .put("gameModeEnabled", gameModeEnabled ?: JSONObject.NULL)
             .put("gameModeLimitMillis", gameModeLimitMillis ?: JSONObject.NULL)
             .put("gameModeLives", gameModeLives ?: JSONObject.NULL)
+            .put("gameModeAutoEnabled", gameModeAutoEnabled ?: JSONObject.NULL)
+            .put("gameModeAutoEveryRuns", gameModeAutoEveryRuns ?: JSONObject.NULL)
             .toString()
     }
 
@@ -205,6 +210,12 @@ data class SessionControlCommandMessage(
             }
             val gameModeLimitMillis = decoded.readOptionalLong("gameModeLimitMillis")
             val gameModeLives = decoded.readOptionalInt("gameModeLives")
+            val gameModeAutoEnabled = if (decoded.has("gameModeAutoEnabled") && !decoded.isNull("gameModeAutoEnabled")) {
+                decoded.optBoolean("gameModeAutoEnabled")
+            } else {
+                null
+            }
+            val gameModeAutoEveryRuns = decoded.readOptionalInt("gameModeAutoEveryRuns")
             if (targetEndpointId.isEmpty() || senderDeviceName.isEmpty()) {
                 return null
             }
@@ -241,6 +252,12 @@ data class SessionControlCommandMessage(
             ) {
                 return null
             }
+            if (
+                action == SessionControlAction.SET_GAME_MODE_AUTO_CONFIG &&
+                (gameModeAutoEnabled == null || gameModeAutoEveryRuns == null || gameModeAutoEveryRuns !in 1..20)
+            ) {
+                return null
+            }
             return SessionControlCommandMessage(
                 action = action,
                 targetEndpointId = targetEndpointId,
@@ -252,6 +269,8 @@ data class SessionControlCommandMessage(
                 gameModeEnabled = gameModeEnabled,
                 gameModeLimitMillis = gameModeLimitMillis,
                 gameModeLives = gameModeLives,
+                gameModeAutoEnabled = gameModeAutoEnabled,
+                gameModeAutoEveryRuns = gameModeAutoEveryRuns,
             )
         }
     }

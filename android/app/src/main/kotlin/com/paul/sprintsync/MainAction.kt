@@ -16,6 +16,11 @@ sealed interface MainAction {
     data class SetGameModeEnabled(val endpointId: String, val enabled: Boolean) : MainAction
     data class SetGameModeLimit(val endpointId: String, val limitMillis: Long) : MainAction
     data class SetGameModeLives(val endpointId: String, val lives: Int) : MainAction
+    data class SetGameModeAutoConfig(
+        val endpointId: String,
+        val enabled: Boolean,
+        val everyRuns: Int,
+    ) : MainAction
     data class SetMonitoringEnabled(val enabled: Boolean) : MainAction
     data object StopMonitoring : MainAction
     data object ResetRun : MainAction
