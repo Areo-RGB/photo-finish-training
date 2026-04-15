@@ -1,6 +1,7 @@
 package com.paul.sprintsync.feature.motion.data.nativebridge
 
 import android.util.Range
+import java.nio.ByteBuffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -374,5 +375,163 @@ class SensorNativeMathTest {
         )
 
         assertNull(selection)
+    }
+
+    @Test
+    fun `roi center y moves sampled square vertically`() {
+        val width = 10
+        val height = 10
+        val baseline = ByteArray(width * height)
+        val changedTopBand = ByteArray(width * height) { index ->
+            val y = index / width
+            if (y in 0..2) 0xFF.toByte() else 0
+        }
+
+        val differTop = RoiFrameDiffer()
+        differTop.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(baseline),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.2,
+            roiHeight = 0.3,
+        )
+        val topScore = differTop.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(changedTopBand),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.2,
+            roiHeight = 0.3,
+        )
+
+        val differBottom = RoiFrameDiffer()
+        differBottom.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(baseline),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.8,
+            roiHeight = 0.3,
+        )
+        val bottomScore = differBottom.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(changedTopBand),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.8,
+            roiHeight = 0.3,
+        )
+
+        assertTrue(topScore > 0.0)
+        assertEquals(0.0, bottomScore, 0.0)
+    }
+
+    @Test
+    fun `roi height controls square size`() {
+        val width = 10
+        val height = 10
+        val baseline = ByteArray(width * height)
+        val changedSinglePixel = ByteArray(width * height).also { frame ->
+            frame[(4 * width) + 6] = 0xFF.toByte()
+        }
+
+        val differSmall = RoiFrameDiffer()
+        differSmall.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(baseline),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.5,
+            roiHeight = 0.1,
+        )
+        val smallScore = differSmall.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(changedSinglePixel),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.5,
+            roiHeight = 0.1,
+        )
+
+        val differLarge = RoiFrameDiffer()
+        differLarge.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(baseline),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.5,
+            roiHeight = 0.6,
+        )
+        val largeScore = differLarge.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(changedSinglePixel),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.5,
+            roiWidth = 0.03,
+            roiCenterY = 0.5,
+            roiHeight = 0.6,
+        )
+
+        assertEquals(0.0, smallScore, 0.0)
+        assertTrue(largeScore > 0.0)
+    }
+
+    @Test
+    fun `roi square bounds clamp near frame edges`() {
+        val width = 3
+        val height = 2
+        val frame = ByteArray(width * height) { 0x10 }
+        val changed = frame.copyOf().also { it[0] = 0x40 }
+        val differ = RoiFrameDiffer()
+
+        val first = differ.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(frame),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.0,
+            roiWidth = 0.03,
+            roiCenterY = 0.0,
+            roiHeight = 0.4,
+        )
+        val second = differ.scoreLumaPlane(
+            lumaBuffer = ByteBuffer.wrap(changed),
+            rowStride = width,
+            pixelStride = 1,
+            width = width,
+            height = height,
+            roiCenterX = 0.0,
+            roiWidth = 0.03,
+            roiCenterY = 0.0,
+            roiHeight = 0.4,
+        )
+
+        assertEquals(0.0, first, 0.0)
+        assertTrue(second >= 0.0)
     }
 }

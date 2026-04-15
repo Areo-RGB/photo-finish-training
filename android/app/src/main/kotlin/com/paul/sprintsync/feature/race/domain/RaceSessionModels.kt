@@ -145,6 +145,7 @@ enum class SessionControlAction {
     SET_GAME_MODE_LIMIT,
     SET_GAME_MODE_LIVES,
     SET_GAME_MODE_AUTO_CONFIG,
+    PLAY_START_SOUND,
 }
 
 data class SessionControlCommandMessage(
@@ -160,6 +161,7 @@ data class SessionControlCommandMessage(
     val gameModeLives: Int? = null,
     val gameModeAutoEnabled: Boolean? = null,
     val gameModeAutoEveryRuns: Int? = null,
+    val gameModeAutoReductionMillis: Long? = null,
 ) {
     fun toJsonString(): String {
         return JSONObject()
@@ -176,6 +178,7 @@ data class SessionControlCommandMessage(
             .put("gameModeLives", gameModeLives ?: JSONObject.NULL)
             .put("gameModeAutoEnabled", gameModeAutoEnabled ?: JSONObject.NULL)
             .put("gameModeAutoEveryRuns", gameModeAutoEveryRuns ?: JSONObject.NULL)
+            .put("gameModeAutoReductionMillis", gameModeAutoReductionMillis ?: JSONObject.NULL)
             .toString()
     }
 
@@ -216,6 +219,7 @@ data class SessionControlCommandMessage(
                 null
             }
             val gameModeAutoEveryRuns = decoded.readOptionalInt("gameModeAutoEveryRuns")
+            val gameModeAutoReductionMillis = decoded.readOptionalLong("gameModeAutoReductionMillis")
             if (targetEndpointId.isEmpty() || senderDeviceName.isEmpty()) {
                 return null
             }
@@ -254,7 +258,13 @@ data class SessionControlCommandMessage(
             }
             if (
                 action == SessionControlAction.SET_GAME_MODE_AUTO_CONFIG &&
-                (gameModeAutoEnabled == null || gameModeAutoEveryRuns == null || gameModeAutoEveryRuns !in 1..20)
+                (
+                    gameModeAutoEnabled == null ||
+                        gameModeAutoEveryRuns == null ||
+                        gameModeAutoEveryRuns !in 1..20 ||
+                        gameModeAutoReductionMillis == null ||
+                        gameModeAutoReductionMillis !in 50L..500L
+                    )
             ) {
                 return null
             }
@@ -271,6 +281,7 @@ data class SessionControlCommandMessage(
                 gameModeLives = gameModeLives,
                 gameModeAutoEnabled = gameModeAutoEnabled,
                 gameModeAutoEveryRuns = gameModeAutoEveryRuns,
+                gameModeAutoReductionMillis = gameModeAutoReductionMillis,
             )
         }
     }

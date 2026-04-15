@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
@@ -66,9 +67,10 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         private const val DEFAULT_GAME_MODE_LIMIT_MILLIS = 5_000L
         private const val DEFAULT_GAME_MODE_LIVES = 10
         private const val DEFAULT_GAME_MODE_AUTO_EVERY_RUNS = 10
-        private const val GAME_MODE_AUTO_LIMIT_REDUCTION_MILLIS = 100L
+        private const val DEFAULT_GAME_MODE_AUTO_REDUCTION_MILLIS = 100L
         private const val MIN_GAME_MODE_LIMIT_MILLIS = 100L
         private const val TARGET_MONITORING_WIFI_SSID = "TP-Link_86CA_5G"
+        private const val DISPLAY_LOCAL_SOUND_TARGET = "__display_local_sound__"
     }
 
     private lateinit var sensorNativeController: SensorNativeController
@@ -103,6 +105,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private val displayGameModeCurrentLivesByEndpointId = linkedMapOf<String, Int>()
     private val displayGameModeAutoEnabledByEndpointId = linkedMapOf<String, Boolean>()
     private val displayGameModeAutoEveryRunsByEndpointId = linkedMapOf<String, Int>()
+    private val displayGameModeAutoReductionMillisByEndpointId = linkedMapOf<String, Long>()
     private val displayGameModeAutoRunCountByEndpointId = linkedMapOf<String, Int>()
     private val displayAutoReadyDelaySecondsByEndpointId = linkedMapOf<String, Int>()
     private val displayAutoReadyResetJobsByEndpointId = linkedMapOf<String, Job>()
@@ -114,6 +117,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     private var pendingPermissionScope: PermissionScope = PermissionScope.NETWORK_ONLY
     private var autoDisplayReconnectJob: Job? = null
     private var autoDisplayReconnectAttempts: Int = 0
+    private var startSoundPlayer: MediaPlayer? = null
     private val runtimeDeviceConfig: RuntimeDeviceConfig = DeviceDetector.detectCurrentDevice()
     private val setupActionProfile: SetupActionProfile = resolveSetupActionProfile(runtimeDeviceConfig)
 
@@ -314,6 +318,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             }
             is MainAction.SetGameModeAutoConfig -> {
                 val everyRuns = action.everyRuns.coerceIn(1, 20)
+                val reductionMillis = action.reductionMillis.coerceIn(50L, 500L)
                 sendControllerCommandToDisplayHost(
                     action = SessionControlAction.SET_GAME_MODE_AUTO_CONFIG,
                     targetEndpointId = action.endpointId,
@@ -326,6 +331,20 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                     gameModeLives = null,
                     gameModeAutoEnabled = action.enabled,
                     gameModeAutoEveryRuns = everyRuns,
+                    gameModeAutoReductionMillis = reductionMillis,
+                )
+            }
+            MainAction.PlayStartSound -> {
+                sendControllerCommandToDisplayHost(
+                    action = SessionControlAction.PLAY_START_SOUND,
+                    targetEndpointId = DISPLAY_LOCAL_SOUND_TARGET,
+                    limitMillis = null,
+                    sensitivityPercent = null,
+                    autoReadyDelaySeconds = null,
+                    waitTextEnabled = null,
+                    gameModeEnabled = null,
+                    gameModeLimitMillis = null,
+                    gameModeLives = null,
                 )
             }
             is MainAction.SetMonitoringEnabled -> {
@@ -395,6 +414,14 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                 motionDetectionController.updateRoiWidth(action.value)
                 syncControllerSummaries()
             }
+            is MainAction.UpdateRoiCenterY -> {
+                motionDetectionController.updateRoiCenterY(action.value)
+                syncControllerSummaries()
+            }
+            is MainAction.UpdateRoiHeight -> {
+                motionDetectionController.updateRoiHeight(action.value)
+                syncControllerSummaries()
+            }
             is MainAction.UpdateCooldown -> {
                 motionDetectionController.updateCooldown(action.value)
                 syncControllerSummaries()
@@ -437,6 +464,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         stopTimerRefreshLoop()
         stopAutoDisplayReconnectLoop()
         cancelAllDisplayAutoReadyResets()
+        startSoundPlayer?.release()
+        startSoundPlayer = null
         connectionsManager.stopAll()
         connectionsManager.setEventListener(null)
         sensorNativeController.setEventListener(null)
@@ -744,6 +773,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                 SessionControlAction.SET_GAME_MODE_LIMIT -> Unit
                                 SessionControlAction.SET_GAME_MODE_LIVES -> Unit
                                 SessionControlAction.SET_GAME_MODE_AUTO_CONFIG -> Unit
+                                SessionControlAction.PLAY_START_SOUND -> Unit
                             }
                         }
                         SessionControllerTargetsMessage.tryParse(event.message)?.let { snapshot ->
@@ -783,6 +813,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         displayGameModeCurrentLivesByEndpointId.remove(event.endpointId)
                         displayGameModeAutoEnabledByEndpointId.remove(event.endpointId)
                         displayGameModeAutoEveryRunsByEndpointId.remove(event.endpointId)
+                        displayGameModeAutoReductionMillisByEndpointId.remove(event.endpointId)
                         displayGameModeAutoRunCountByEndpointId.remove(event.endpointId)
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
                     }
@@ -806,6 +837,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                             displayGameModeCurrentLivesByEndpointId.remove(event.endpointId)
                             displayGameModeAutoEnabledByEndpointId.remove(event.endpointId)
                             displayGameModeAutoEveryRunsByEndpointId.remove(event.endpointId)
+                            displayGameModeAutoReductionMillisByEndpointId.remove(event.endpointId)
                             displayGameModeAutoRunCountByEndpointId.remove(event.endpointId)
                         }
                         broadcastControllerTargetsSnapshotToConnectedEndpoints()
@@ -824,6 +856,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         displayGameModeCurrentLivesByEndpointId.remove(event.endpointId)
                         displayGameModeAutoEnabledByEndpointId.remove(event.endpointId)
                         displayGameModeAutoEveryRunsByEndpointId.remove(event.endpointId)
+                        displayGameModeAutoReductionMillisByEndpointId.remove(event.endpointId)
                         displayGameModeAutoRunCountByEndpointId.remove(event.endpointId)
                         displayAutoReadyDelaySecondsByEndpointId.remove(event.endpointId)
                         cancelDisplayAutoReadyReset(event.endpointId)
@@ -850,6 +883,10 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                     displayWaitingEndpointIds.remove(command.targetEndpointId)
                                     displayWaitingStartElapsedRealtimeNanosByEndpointId.remove(command.targetEndpointId)
                                     displayGameModeAutoRunCountByEndpointId[command.targetEndpointId] = 0
+                                    val configuredLives =
+                                        (displayGameModeConfiguredLivesByEndpointId[command.targetEndpointId]
+                                            ?: DEFAULT_GAME_MODE_LIVES).coerceIn(1, 10)
+                                    displayGameModeCurrentLivesByEndpointId[command.targetEndpointId] = configuredLives
                                     if (connectionsManager.connectedEndpoints().contains(command.targetEndpointId)) {
                                         connectionsManager.sendMessage(command.targetEndpointId, command.toJsonString()) { result ->
                                             result.exceptionOrNull()?.let { error ->
@@ -936,9 +973,16 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                                     val autoEnabled = command.gameModeAutoEnabled == true
                                     val everyRuns = (command.gameModeAutoEveryRuns ?: DEFAULT_GAME_MODE_AUTO_EVERY_RUNS)
                                         .coerceIn(1, 20)
+                                    val reductionMillis =
+                                        (command.gameModeAutoReductionMillis ?: DEFAULT_GAME_MODE_AUTO_REDUCTION_MILLIS)
+                                            .coerceIn(50L, 500L)
                                     displayGameModeAutoEnabledByEndpointId[command.targetEndpointId] = autoEnabled
                                     displayGameModeAutoEveryRunsByEndpointId[command.targetEndpointId] = everyRuns
+                                    displayGameModeAutoReductionMillisByEndpointId[command.targetEndpointId] = reductionMillis
                                     displayGameModeAutoRunCountByEndpointId[command.targetEndpointId] = 0
+                                }
+                                SessionControlAction.PLAY_START_SOUND -> {
+                                    playStartSoundEffect()
                                 }
                             }
                         }
@@ -1079,7 +1123,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             mode == SessionOperatingMode.DISPLAY_HOST &&
                 displayWaitingEndpointIds.any { endpointId ->
                     displayLatestLapByEndpointId[endpointId] == null &&
-                        displayWaitTextEnabledByEndpointId[endpointId] == false &&
+                        displayWaitTextEnabledByEndpointId[endpointId] != true &&
                         displayWaitingStartElapsedRealtimeNanosByEndpointId[endpointId] != null
                 }
 
@@ -1276,6 +1320,8 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                 threshold = motionState.config.threshold,
                 roiCenterX = motionState.config.roiCenterX,
                 roiWidth = motionState.config.roiWidth,
+                roiCenterY = motionState.config.roiCenterY,
+                roiHeight = motionState.config.roiHeight,
                 cooldownMs = motionState.config.cooldownMs,
                 processEveryNFrames = motionState.config.processEveryNFrames,
                 observedFps = motionState.observedFps,
@@ -1451,7 +1497,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
                         connectedEndpointIds.any { endpointId ->
                             displayWaitingEndpointIds.contains(endpointId) &&
                                 displayLatestLapByEndpointId[endpointId] == null &&
-                                displayWaitTextEnabledByEndpointId[endpointId] == false &&
+                                displayWaitTextEnabledByEndpointId[endpointId] != true &&
                                 displayWaitingStartElapsedRealtimeNanosByEndpointId[endpointId] != null
                         }
                     val shouldRefreshForDisplayRows = hasDisplayLocalWaitingTimers ||
@@ -1543,6 +1589,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         gameModeLives: Int?,
         gameModeAutoEnabled: Boolean? = null,
         gameModeAutoEveryRuns: Int? = null,
+        gameModeAutoReductionMillis: Long? = null,
     ) {
         val hostEndpoint = displayConnectedHostEndpointId
         if (hostEndpoint.isNullOrBlank()) {
@@ -1562,6 +1609,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
             gameModeLives = gameModeLives,
             gameModeAutoEnabled = gameModeAutoEnabled,
             gameModeAutoEveryRuns = gameModeAutoEveryRuns,
+            gameModeAutoReductionMillis = gameModeAutoReductionMillis,
         ).toJsonString()
         connectionsManager.sendMessage(hostEndpoint, payload) { result ->
             result.exceptionOrNull()?.let { error ->
@@ -1570,8 +1618,32 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         }
     }
 
+    private fun playStartSoundEffect() {
+        runCatching {
+            startSoundPlayer?.release()
+            startSoundPlayer = MediaPlayer.create(this, R.raw.start)?.apply {
+                setOnCompletionListener { player ->
+                    player.release()
+                    if (startSoundPlayer === player) {
+                        startSoundPlayer = null
+                    }
+                }
+                setOnErrorListener { player, _, _ ->
+                    player.release()
+                    if (startSoundPlayer === player) {
+                        startSoundPlayer = null
+                    }
+                    true
+                }
+                start()
+            }
+        }.onFailure { error ->
+            appendEvent("start sound error: ${error.localizedMessage ?: "unknown"}")
+        }
+    }
+
     private fun applyGameModeLifePenaltyIfNeeded(endpointId: String, elapsedNanos: Long) {
-        if (displayGameModeEnabledByEndpointId[endpointId] != true) {
+        if (displayGameModeEnabledByEndpointId[endpointId] == false) {
             return
         }
         val limitMillis = displayGameModeLimitMillisByEndpointId[endpointId] ?: DEFAULT_GAME_MODE_LIMIT_MILLIS
@@ -1594,20 +1666,22 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
     }
 
     private fun applyGameModeAutoLimitProgressIfNeeded(endpointId: String) {
-        if (displayGameModeEnabledByEndpointId[endpointId] != true) {
+        if (displayGameModeEnabledByEndpointId[endpointId] == false) {
             return
         }
-        if (displayGameModeAutoEnabledByEndpointId[endpointId] != true) {
+        if (displayGameModeAutoEnabledByEndpointId[endpointId] == false) {
             return
         }
         val currentLimitMillis = displayGameModeLimitMillisByEndpointId[endpointId] ?: DEFAULT_GAME_MODE_LIMIT_MILLIS
         val currentRunCount = displayGameModeAutoRunCountByEndpointId[endpointId] ?: 0
         val everyRuns = displayGameModeAutoEveryRunsByEndpointId[endpointId] ?: DEFAULT_GAME_MODE_AUTO_EVERY_RUNS
+        val reductionMillis =
+            displayGameModeAutoReductionMillisByEndpointId[endpointId] ?: DEFAULT_GAME_MODE_AUTO_REDUCTION_MILLIS
         val advanced = advanceGameModeAutoLimit(
             currentRunCount = currentRunCount,
             everyRuns = everyRuns,
             currentLimitMillis = currentLimitMillis,
-            reductionMillis = GAME_MODE_AUTO_LIMIT_REDUCTION_MILLIS,
+            reductionMillis = reductionMillis,
             minLimitMillis = MIN_GAME_MODE_LIMIT_MILLIS,
         )
         displayGameModeAutoRunCountByEndpointId[endpointId] = advanced.nextRunCount
@@ -1728,6 +1802,7 @@ class MainActivity : ComponentActivity(), ActivityCompat.OnRequestPermissionsRes
         displayGameModeCurrentLivesByEndpointId.clear()
         displayGameModeAutoEnabledByEndpointId.clear()
         displayGameModeAutoEveryRunsByEndpointId.clear()
+        displayGameModeAutoReductionMillisByEndpointId.clear()
         displayGameModeAutoRunCountByEndpointId.clear()
         displayAutoReadyDelaySecondsByEndpointId.clear()
     }
@@ -1927,11 +2002,17 @@ internal fun buildDisplayLapRowsForConnectedDevices(
     } else {
         null
     }
-    return connectedEndpointIds.map { endpointId ->
+    val orderedEndpointIds = connectedEndpointIds.toList().let { endpointIds ->
+        val (pixelEndpoints, otherEndpoints) = endpointIds.partition { endpointId ->
+            deviceNamesByEndpointId[endpointId]?.contains("pixel 7", ignoreCase = true) == true
+        }
+        pixelEndpoints + otherEndpoints
+    }
+    return orderedEndpointIds.map { endpointId ->
         val deviceName = deviceNamesByEndpointId[endpointId]?.takeIf { it.isNotBlank() } ?: endpointId
         val endpointFinalNanos = elapsedByEndpointId[endpointId]
         val endpointIsWaiting = endpointFinalNanos == null && waitingEndpointIds.contains(endpointId)
-        val waitTextEnabled = waitTextEnabledByEndpointId[endpointId] != false
+        val waitTextEnabled = waitTextEnabledByEndpointId[endpointId] == true
         val waitingStartElapsedRealtimeNanos = waitingStartElapsedRealtimeNanosByEndpointId[endpointId]
         val localDisplayTimerNanos = if (
             endpointIsWaiting &&
@@ -1943,7 +2024,23 @@ internal fun buildDisplayLapRowsForConnectedDevices(
             null
         }
         val elapsedNanos = endpointFinalNanos ?: localDisplayTimerNanos ?: if (endpointIsWaiting) null else liveElapsedNanos
+        val shouldPulseWait = endpointIsWaiting && waitTextEnabled
+        val gameModeEnabled = gameModeEnabledByEndpointId[endpointId] != false
+        val gameModeCountdownEnabled = gameModeEnabled
+        val gameModeLimitMillis = gameModeLimitMillisByEndpointId[endpointId] ?: 5_000L
+        val effectiveLimitMillis = if (gameModeCountdownEnabled) gameModeLimitMillis else null
+        val remainingMillis = if (effectiveLimitMillis != null) {
+            val elapsedMillis = elapsedNanos?.div(1_000_000L)
+            if (elapsedMillis != null) {
+                effectiveLimitMillis - elapsedMillis
+            } else {
+                effectiveLimitMillis
+            }
+        } else {
+            null
+        }
         val lapTimeLabel = when {
+            remainingMillis != null -> formatSignedMillisDisplay(remainingMillis)
             elapsedNanos != null -> {
                 val totalMillis = (elapsedNanos / 1_000_000L).coerceAtLeast(0L)
                 formatElapsedTimerDisplay(totalMillis)
@@ -1951,21 +2048,14 @@ internal fun buildDisplayLapRowsForConnectedDevices(
             endpointIsWaiting -> "WAIT"
             else -> "READY"
         }
-        val shouldPulseWait = endpointIsWaiting && waitTextEnabled
-        val configuredDisplayLimitMillis = limitMillisByEndpointId[endpointId]
-        val gameModeEnabled = gameModeEnabledByEndpointId[endpointId] == true
-        val gameModeLimitMillis = gameModeLimitMillisByEndpointId[endpointId] ?: 5_000L
-        val effectiveLimitMillis = configuredDisplayLimitMillis
-            ?: if (gameModeEnabled) gameModeLimitMillis else null
-        val limitNanos = effectiveLimitMillis?.times(1_000_000L)
-        val isOverLimit = limitNanos != null && elapsedNanos != null && elapsedNanos > limitNanos
-        val isUnderLimit = limitNanos != null && elapsedNanos != null && elapsedNanos <= limitNanos
+        val isOverLimit = remainingMillis != null && elapsedNanos != null && remainingMillis <= 0L
+        val isUnderLimit = remainingMillis != null && endpointFinalNanos != null && remainingMillis > 0L
         val maxLives = (gameModeConfiguredLivesByEndpointId[endpointId] ?: 10).coerceIn(1, 10)
         val currentLives = (gameModeCurrentLivesByEndpointId[endpointId] ?: maxLives).coerceIn(0, maxLives)
         DisplayLapRow(
             deviceName = deviceName,
             lapTimeLabel = lapTimeLabel,
-            limitLabel = effectiveLimitMillis?.let(::formatDisplayLimitLabel),
+            limitLabel = null,
             isOverLimit = isOverLimit,
             isUnderLimit = isUnderLimit,
             isWaiting = shouldPulseWait,
@@ -1976,7 +2066,10 @@ internal fun buildDisplayLapRowsForConnectedDevices(
     }
 }
 
-internal fun formatDisplayLimitLabel(limitMillis: Long): String = "Limit ${limitMillis} ms"
+internal fun formatDisplayLimitLabel(limitMillis: Long): String = "${limitMillis} ms"
+
+internal fun formatSignedMillisDisplay(totalMillis: Long): String =
+    String.format(java.util.Locale.US, "%.3f", totalMillis / 1_000.0)
 
 internal fun computeNextGameModeLives(
     gameModeEnabled: Boolean,

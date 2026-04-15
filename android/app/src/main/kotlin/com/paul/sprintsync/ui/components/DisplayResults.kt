@@ -31,7 +31,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -93,8 +95,6 @@ internal fun DisplayResultsCard(rows: List<DisplayLapRow>, modifier: Modifier = 
             maxLabelLength = widestLapTimeLabelLength,
             density = density,
         )
-        val clampedDeviceFont = clampDisplayLabelFont(layout.deviceFont, cardHeight, density)
-
         if (stackVertically) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -102,24 +102,26 @@ internal fun DisplayResultsCard(rows: List<DisplayLapRow>, modifier: Modifier = 
             ) {
                 itemsIndexed(rows) { index, row ->
                     Box {
+                        val isKnockedOut = row.showLives && row.currentLives <= 0
                         DisplayResultPanel(
                             row = row,
                             cardWidth = cardWidth,
                             cardHeight = cardHeight,
                             layout = layout,
                             timeFont = clampedTimeFont,
-                            deviceFont = clampedDeviceFont,
                             defaultCardBackground = displayCardBackground,
                             defaultTimeColor = displayTimeColor,
                             defaultDeviceColor = displayDeviceColor,
                         )
-                        DisplayDirectionArrow(
-                            direction = if (index == 0) DisplayArrowDirection.LEFT else DisplayArrowDirection.RIGHT,
-                            modifier = Modifier
-                                .align(if (index == 0) Alignment.TopStart else Alignment.TopEnd)
-                                .fillMaxHeight(0.34f)
-                                .padding(horizontal = 18.dp, vertical = 10.dp),
-                        )
+                        if (!isKnockedOut) {
+                            DisplayDirectionArrow(
+                                direction = if (index == 0) DisplayArrowDirection.LEFT else DisplayArrowDirection.RIGHT,
+                                modifier = Modifier
+                                    .align(if (index == 0) Alignment.TopStart else Alignment.TopEnd)
+                                    .fillMaxHeight(0.34f)
+                                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                            )
+                        }
                     }
                     if (index < rows.lastIndex) {
                         Box(
@@ -146,7 +148,6 @@ internal fun DisplayResultsCard(rows: List<DisplayLapRow>, modifier: Modifier = 
                             cardHeight = cardHeight,
                             layout = layout,
                             timeFont = clampedTimeFont,
-                            deviceFont = clampedDeviceFont,
                             defaultCardBackground = displayCardBackground,
                             defaultTimeColor = displayTimeColor,
                             defaultDeviceColor = displayDeviceColor,
@@ -173,12 +174,13 @@ private fun DisplayResultPanel(
     cardHeight: Dp,
     layout: DisplayLayoutSpec,
     timeFont: TextUnit,
-    deviceFont: TextUnit,
     defaultCardBackground: Color,
     defaultTimeColor: Color,
     defaultDeviceColor: Color,
 ) {
+    val isKnockedOut = row.showLives && row.currentLives <= 0
     val cardBackground = when {
+        isKnockedOut -> Color(0xFFB71C1C)
         row.isOverLimit -> Color(0xFFD32F2F)
         row.isUnderLimit -> Color(0xFF2E7D32)
         else -> defaultCardBackground
@@ -195,12 +197,45 @@ private fun DisplayResultPanel(
         label = "waitPulseAlpha",
     )
     val lapTextAlpha = if (row.isWaiting) waitPulseAlpha else 1f
+    val readyFont = maxOf((timeFont.value * 0.72f), 32f).sp
+    val lowLivesPulseTransition = rememberInfiniteTransition(label = "lowLivesPulse")
+    val lowLivesScale by lowLivesPulseTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.22f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "lowLivesScale",
+    )
     Box(
         modifier = Modifier
             .width(cardWidth)
             .height(cardHeight)
             .background(cardBackground),
     ) {
+        if (isKnockedOut) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(42.dp),
+            ) {
+                val stroke = size.minDimension * 0.08f
+                drawLine(
+                    color = Color.Red,
+                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+                    strokeWidth = stroke,
+                )
+                drawLine(
+                    color = Color.Red,
+                    start = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                    end = androidx.compose.ui.geometry.Offset(0f, size.height),
+                    strokeWidth = stroke,
+                )
+            }
+            return
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -209,24 +244,11 @@ private fun DisplayResultPanel(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = row.deviceName,
-                style = MaterialTheme.typography.bodySmall.merge(
-                    TextStyle(
-                        fontSize = deviceFont,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp,
-                    ),
-                ),
-                color = foregroundColor,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
                 text = row.lapTimeLabel,
                 style = MaterialTheme.typography.displayLarge.merge(
                     InterExtraBoldTabularTypography.merge(
                         TextStyle(
-                            fontSize = timeFont,
+                            fontSize = if (row.lapTimeLabel == "READY") readyFont else timeFont,
                         ),
                     ),
                 ),
@@ -237,45 +259,45 @@ private fun DisplayResultPanel(
                 modifier = Modifier.alpha(lapTextAlpha),
             )
             if (row.showLives) {
-                val heartSize = displayHeartSizeForLives(
-                    currentLives = row.currentLives,
-                    maxLives = row.maxLives,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                val heartSize = 58.dp
+                val clampedMaxLives = row.maxLives.coerceAtLeast(1)
+                val clampedCurrentLives = row.currentLives.coerceIn(0, clampedMaxLives)
+                val showLowLivesPulse = clampedCurrentLives in 1..3
+                val pulseHeartSize = 70.dp
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    repeat(row.currentLives.coerceAtLeast(0)) {
-                        Image(
-                            painter = painterResource(id = R.drawable.heart_svgrepo_com),
-                            contentDescription = "Life",
-                            modifier = Modifier.size(heartSize),
-                        )
+                    if (showLowLivesPulse) {
+                        repeat(clampedCurrentLives) {
+                            Image(
+                                painter = painterResource(id = R.drawable.heart_svgrepo_com),
+                                contentDescription = "Life",
+                                modifier = Modifier
+                                    .size(pulseHeartSize)
+                                    .scale(lowLivesScale),
+                                colorFilter = ColorFilter.tint(Color(0xFFC62828)),
+                            )
+                        }
+                    } else {
+                        repeat(clampedMaxLives) { index ->
+                            val heartColor = if (index < clampedCurrentLives) {
+                                Color(0xFFC62828)
+                            } else {
+                                Color.Black
+                            }
+                            Image(
+                                painter = painterResource(id = R.drawable.heart_svgrepo_com),
+                                contentDescription = "Life",
+                                modifier = Modifier.size(heartSize),
+                                colorFilter = ColorFilter.tint(heartColor),
+                            )
+                        }
                     }
                 }
             }
-            row.limitLabel?.let { label ->
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = foregroundColor,
-                    textAlign = TextAlign.Center,
-                )
-            }
         }
-    }
-}
-
-private fun displayHeartSizeForLives(currentLives: Int, maxLives: Int): Dp {
-    val clampedMax = maxLives.coerceAtLeast(1)
-    val clampedCurrent = currentLives.coerceIn(0, clampedMax)
-    return when {
-        clampedCurrent <= 3 -> 72.dp
-        clampedCurrent <= 5 -> 62.dp
-        clampedCurrent <= 7 -> 52.dp
-        else -> 42.dp
     }
 }
 

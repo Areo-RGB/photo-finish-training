@@ -114,24 +114,31 @@ class RoiFrameDiffer {
         height: Int,
         roiCenterX: Double,
         roiWidth: Double,
+        roiCenterY: Double,
+        roiHeight: Double,
     ): Double {
         val roiCenterPx = (roiCenterX * width).toInt()
-        val roiWidthPx = max(1, (roiWidth * width).toInt())
-        val startX = max(0, roiCenterPx - (roiWidthPx / 2))
-        val endX = min(width, startX + roiWidthPx)
-        if (endX <= startX) {
+        val roiCenterYPx = (roiCenterY * height).toInt()
+        val sidePx = max(1, (roiHeight * min(width, height)).toInt())
+        val desiredStartX = roiCenterPx - (sidePx / 2)
+        val desiredStartY = roiCenterYPx - (sidePx / 2)
+        val startX = desiredStartX.coerceIn(0, max(0, width - sidePx))
+        val startY = desiredStartY.coerceIn(0, max(0, height - sidePx))
+        val endX = min(width, startX + sidePx)
+        val endY = min(height, startY + sidePx)
+        if (endX <= startX || endY <= startY) {
             return 0.0
         }
 
         val xStep = 2
         val yStep = 2
         val sampleWidth = ((endX - startX) + (xStep - 1)) / xStep
-        val sampleHeight = (height + (yStep - 1)) / yStep
+        val sampleHeight = ((endY - startY) + (yStep - 1)) / yStep
         val sampleCount = sampleWidth * sampleHeight
         val current = ByteArray(sampleCount)
 
         var index = 0
-        for (y in 0 until height step yStep) {
+        for (y in startY until endY step yStep) {
             val rowOffset = y * rowStride
             for (x in startX until endX step xStep) {
                 current[index] = lumaBuffer.get(rowOffset + (x * pixelStride))

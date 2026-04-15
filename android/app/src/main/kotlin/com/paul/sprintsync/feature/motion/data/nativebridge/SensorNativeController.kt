@@ -206,6 +206,8 @@ class SensorNativeController(
                 height = image.height,
                 roiCenterX = activeConfig.roiCenterX,
                 roiWidth = activeConfig.roiWidth,
+                roiCenterY = activeConfig.roiCenterY,
+                roiHeight = activeConfig.roiHeight,
             )
             processedFrameCount += 1
             val stats = detectionMath.process(

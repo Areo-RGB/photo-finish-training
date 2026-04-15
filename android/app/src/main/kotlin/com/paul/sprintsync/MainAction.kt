@@ -20,7 +20,9 @@ sealed interface MainAction {
         val endpointId: String,
         val enabled: Boolean,
         val everyRuns: Int,
+        val reductionMillis: Long,
     ) : MainAction
+    data object PlayStartSound : MainAction
     data class SetMonitoringEnabled(val enabled: Boolean) : MainAction
     data object StopMonitoring : MainAction
     data object ResetRun : MainAction
@@ -28,6 +30,8 @@ sealed interface MainAction {
     data class UpdateThreshold(val value: Double) : MainAction
     data class UpdateRoiCenter(val value: Double) : MainAction
     data class UpdateRoiWidth(val value: Double) : MainAction
+    data class UpdateRoiCenterY(val value: Double) : MainAction
+    data class UpdateRoiHeight(val value: Double) : MainAction
     data class UpdateCooldown(val value: Int) : MainAction
     data object OpenWifiSettings : MainAction
 }

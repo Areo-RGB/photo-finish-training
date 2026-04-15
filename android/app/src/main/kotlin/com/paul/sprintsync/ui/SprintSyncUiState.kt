@@ -34,6 +34,8 @@ data class SprintSyncUiState(
     val threshold: Double = 0.006,
     val roiCenterX: Double = 0.5,
     val roiWidth: Double = 0.06,
+    val roiCenterY: Double = 0.5,
+    val roiHeight: Double = 0.03,
     val cooldownMs: Int = 900,
     val processEveryNFrames: Int = 1,
     val observedFps: Double? = null,

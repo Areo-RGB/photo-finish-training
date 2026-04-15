@@ -214,6 +214,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
             elapsedByEndpointId = emptyMap(),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = null,
             hostStopSensorNanos = null,
             monitoringActive = false,
@@ -232,7 +233,9 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
             elapsedByEndpointId = emptyMap(),
             waitingEndpointIds = linkedSetOf("ep-1"),
+            waitTextEnabledByEndpointId = mapOf("ep-1" to true),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = null,
             monitoringActive = true,
@@ -254,6 +257,7 @@ class MainActivityMonitoringLogicTest {
             waitingStartElapsedRealtimeNanosByEndpointId = mapOf("ep-1" to 1_000_000_000L),
             waitTextEnabledByEndpointId = mapOf("ep-1" to false),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = null,
             hostStopSensorNanos = null,
             monitoringActive = false,
@@ -274,6 +278,7 @@ class MainActivityMonitoringLogicTest {
             elapsedByEndpointId = mapOf("ep-1" to 1_730_000_000L),
             waitingEndpointIds = linkedSetOf("ep-1"),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = null,
             monitoringActive = true,
@@ -292,6 +297,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
             elapsedByEndpointId = mapOf("ep-1" to 1_730_000_000L),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = null,
             monitoringActive = true,
@@ -310,6 +316,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7", "ep-2" to "CPH2399"),
             elapsedByEndpointId = mapOf("ep-1" to 1_730_000_000L),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false, "ep-2" to false),
             hostStartSensorNanos = null,
             hostStopSensorNanos = null,
             monitoringActive = false,
@@ -324,6 +331,25 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
+    fun `display rows keep Pixel 7 endpoint first when connected`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-2", "ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7", "ep-2" to "EML-L29"),
+            elapsedByEndpointId = emptyMap(),
+            limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false, "ep-2" to false),
+            hostStartSensorNanos = null,
+            hostStopSensorNanos = null,
+            monitoringActive = false,
+            nowSensorNanos = 0L,
+        )
+
+        assertEquals(2, rows.size)
+        assertEquals("Pixel 7", rows[0].deviceName)
+        assertEquals("EML-L29", rows[1].deviceName)
+    }
+
+    @Test
     fun `display rows only include currently connected endpoints`() {
         val rows = buildDisplayLapRowsForConnectedDevices(
             connectedEndpointIds = linkedSetOf("ep-2"),
@@ -333,6 +359,7 @@ class MainActivityMonitoringLogicTest {
                 "ep-2" to 1_770_000_000L,
             ),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false, "ep-2" to false),
             hostStartSensorNanos = null,
             hostStopSensorNanos = null,
             monitoringActive = false,
@@ -351,6 +378,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
             elapsedByEndpointId = emptyMap(),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = null,
             monitoringActive = true,
@@ -369,6 +397,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
             elapsedByEndpointId = mapOf("ep-1" to 1_730_000_000L),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = null,
             monitoringActive = true,
@@ -386,6 +415,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7", "ep-2" to "CPH2399"),
             elapsedByEndpointId = mapOf("ep-1" to 1_730_000_000L),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false, "ep-2" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = null,
             monitoringActive = true,
@@ -404,6 +434,7 @@ class MainActivityMonitoringLogicTest {
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
             elapsedByEndpointId = emptyMap(),
             limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to false),
             hostStartSensorNanos = 1_000_000_000L,
             hostStopSensorNanos = 2_000_000_000L,
             monitoringActive = false,
@@ -544,7 +575,7 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
-    fun `display rows mark over limit when elapsed exceeds per-endpoint limit`() {
+    fun `display rows mark over limit when elapsed exceeds game mode limit`() {
         val rows = buildDisplayLapRowsForConnectedDevices(
             connectedEndpointIds = linkedSetOf("ep-1", "ep-2"),
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7", "ep-2" to "CPH2399"),
@@ -552,10 +583,9 @@ class MainActivityMonitoringLogicTest {
                 "ep-1" to 31_000_000_000L,
                 "ep-2" to 15_000_000_000L,
             ),
-            limitMillisByEndpointId = mapOf(
-                "ep-1" to 30_000L,
-                "ep-2" to 30_000L,
-            ),
+            limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to true, "ep-2" to true),
+            gameModeLimitMillisByEndpointId = mapOf("ep-1" to 30_000L, "ep-2" to 30_000L),
             hostStartSensorNanos = null,
             hostStopSensorNanos = null,
             monitoringActive = false,
@@ -564,11 +594,13 @@ class MainActivityMonitoringLogicTest {
 
         assertEquals(true, rows[0].isOverLimit)
         assertEquals(false, rows[1].isOverLimit)
-        assertEquals("Limit 30000 ms", rows[0].limitLabel)
+        assertEquals("-1.000", rows[0].lapTimeLabel)
+        assertEquals("15.000", rows[1].lapTimeLabel)
+        assertEquals(null, rows[0].limitLabel)
     }
 
     @Test
-    fun `display rows include game mode lives with default limit label`() {
+    fun `display rows include game mode lives and use default limit countdown label`() {
         val rows = buildDisplayLapRowsForConnectedDevices(
             connectedEndpointIds = linkedSetOf("ep-1"),
             deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
@@ -587,7 +619,50 @@ class MainActivityMonitoringLogicTest {
         assertTrue(rows[0].showLives)
         assertEquals(6, rows[0].currentLives)
         assertEquals(8, rows[0].maxLives)
-        assertEquals("Limit 5000 ms", rows[0].limitLabel)
+        assertEquals("3.000", rows[0].lapTimeLabel)
+        assertEquals(null, rows[0].limitLabel)
+    }
+
+    @Test
+    fun `display rows show static limit countdown before timing starts`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
+            elapsedByEndpointId = emptyMap(),
+            limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to true),
+            gameModeLimitMillisByEndpointId = mapOf("ep-1" to 5_000L),
+            hostStartSensorNanos = null,
+            hostStopSensorNanos = null,
+            monitoringActive = false,
+            nowSensorNanos = 0L,
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals("5.000", rows[0].lapTimeLabel)
+        assertFalse(rows[0].isOverLimit)
+        assertFalse(rows[0].isUnderLimit)
+    }
+
+    @Test
+    fun `display rows show signed countdown when elapsed passes limit`() {
+        val rows = buildDisplayLapRowsForConnectedDevices(
+            connectedEndpointIds = linkedSetOf("ep-1"),
+            deviceNamesByEndpointId = mapOf("ep-1" to "Pixel 7"),
+            elapsedByEndpointId = mapOf("ep-1" to 5_350_000_000L),
+            limitMillisByEndpointId = emptyMap(),
+            gameModeEnabledByEndpointId = mapOf("ep-1" to true),
+            gameModeLimitMillisByEndpointId = mapOf("ep-1" to 5_000L),
+            hostStartSensorNanos = null,
+            hostStopSensorNanos = null,
+            monitoringActive = false,
+            nowSensorNanos = 0L,
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals("-0.350", rows[0].lapTimeLabel)
+        assertTrue(rows[0].isOverLimit)
+        assertFalse(rows[0].isUnderLimit)
     }
 
     @Test
@@ -647,15 +722,16 @@ class MainActivityMonitoringLogicTest {
     }
 
     @Test
-    fun `game mode auto limit reduces by 100 ms at threshold and resets counter`() {
+    fun `game mode auto limit reduces by configured millis at threshold and resets counter`() {
         val advanced = advanceGameModeAutoLimit(
             currentRunCount = 9,
             everyRuns = 10,
             currentLimitMillis = 5_000L,
+            reductionMillis = 250L,
         )
 
         assertEquals(0, advanced.nextRunCount)
-        assertEquals(4_900L, advanced.nextLimitMillis)
+        assertEquals(4_750L, advanced.nextLimitMillis)
     }
 
     @Test

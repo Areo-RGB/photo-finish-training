@@ -106,6 +106,8 @@ internal fun MonitoringSummaryCard(
     onShowPreviewChanged: (Boolean) -> Unit,
     previewViewFactory: SensorNativePreviewViewFactory,
     roiCenterX: Double,
+    roiCenterY: Double,
+    roiHeight: Double,
     operatingMode: SessionOperatingMode,
     setupActionProfile: SetupActionProfile,
     devices: List<SessionDevice>,
@@ -124,29 +126,33 @@ internal fun MonitoringSummaryCard(
     onSetGameModeEnabled: (String, Boolean) -> Unit,
     onSetGameModeLimit: (String, Long) -> Unit,
     onSetGameModeLives: (String, Int) -> Unit,
-    onSetGameModeAutoConfig: (String, Boolean, Int) -> Unit,
+    onSetGameModeAutoConfig: (String, Boolean, Int, Long) -> Unit,
+    onPlayStartSound: () -> Unit,
     onResetRun: () -> Unit,
 ) {
-    val controllerLimitInputs = remember { mutableStateMapOf<String, String>() }
     val controllerSensitivityInputs = remember { mutableStateMapOf<String, Float>() }
-    var globalLimitInput by rememberSaveable { mutableStateOf("") }
     var globalAutoReadyDelaySeconds by rememberSaveable { mutableStateOf<Int?>(2) }
     var globalAutoReadyMenuExpanded by remember { mutableStateOf(false) }
-    var globalWaitTextEnabled by rememberSaveable { mutableStateOf(true) }
+    var globalWaitTextEnabled by rememberSaveable { mutableStateOf(false) }
     var controllerTabIndex by rememberSaveable { mutableStateOf(0) }
-    var globalGameModeEnabled by rememberSaveable { mutableStateOf(false) }
+    var globalGameModeEnabled by rememberSaveable { mutableStateOf(true) }
     var globalGameModeLimitMillis by rememberSaveable { mutableStateOf(5_000L) }
     var globalGameModeLives by rememberSaveable { mutableStateOf(10) }
-    var globalGameModeAutoEnabled by rememberSaveable { mutableStateOf(false) }
+    var globalGameModeAutoEnabled by rememberSaveable { mutableStateOf(true) }
     var globalGameModeAutoEveryRuns by rememberSaveable { mutableStateOf(10) }
+    var globalGameModeAutoReductionMillis by rememberSaveable { mutableStateOf(100L) }
     var globalGameModeLivesMenuExpanded by remember { mutableStateOf(false) }
     var globalGameModeAutoEveryRunsMenuExpanded by remember { mutableStateOf(false) }
+    var globalGameModeAutoReductionMenuExpanded by remember { mutableStateOf(false) }
     val controllerGameLivesInputs = remember { mutableStateMapOf<String, Int>() }
     val controllerGameLivesMenusExpanded = remember { mutableStateMapOf<String, Boolean>() }
     val controllerGameAutoEnabledInputs = remember { mutableStateMapOf<String, Boolean>() }
     val controllerGameAutoEveryRunsInputs = remember { mutableStateMapOf<String, Int>() }
     val controllerGameAutoEveryRunsMenusExpanded = remember { mutableStateMapOf<String, Boolean>() }
+    val controllerGameAutoReductionInputs = remember { mutableStateMapOf<String, Long>() }
+    val controllerGameAutoReductionMenusExpanded = remember { mutableStateMapOf<String, Boolean>() }
     val globalAutoReadyLabel = globalAutoReadyDelaySeconds?.let { "$it s" } ?: "Manual"
+    val reductionOptions = 50L..500L step 50L
     val controllerTargetDevices = remember(
         setupActionProfile,
         controllerTargetEndpoints,
@@ -172,7 +178,6 @@ internal fun MonitoringSummaryCard(
     }
     val controllerUiState = ControllerTargetsUiState(
         controllerTabIndex = controllerTabIndex,
-        globalLimitInput = globalLimitInput,
         globalAutoReadyDelaySeconds = globalAutoReadyDelaySeconds,
         globalWaitTextEnabled = globalWaitTextEnabled,
         globalGameModeEnabled = globalGameModeEnabled,
@@ -235,6 +240,8 @@ internal fun MonitoringSummaryCard(
                             PreviewSurface(
                                 previewViewFactory = previewViewFactory,
                                 roiCenterX = roiCenterX,
+                                roiCenterY = roiCenterY,
+                                roiHeight = roiHeight,
                             )
                         }
                     }
@@ -296,28 +303,9 @@ internal fun MonitoringSummaryCard(
                                             onResetDeviceTimer(device.id)
                                         }
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Text("Reset All")
-                                }
-                                OutlinedTextField(
-                                    value = globalLimitInput,
-                                    onValueChange = { globalLimitInput = it.filter(Char::isDigit) },
-                                    label = { Text("Limit All (ms)") },
-                                    singleLine = true,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                OutlinedButton(
-                                    onClick = {
-                                        val millis = globalLimitInput.toLongOrNull()
-                                        if (millis != null && millis > 0L) {
-                                            controllerTargetDevices.forEach { device ->
-                                                onSetDisplayLimit(device.id, millis)
-                                            }
-                                        }
-                                    },
-                                ) {
-                                    Text("Set All")
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -354,6 +342,9 @@ internal fun MonitoringSummaryCard(
                                                 onClick = {
                                                     globalAutoReadyDelaySeconds = seconds
                                                     globalAutoReadyMenuExpanded = false
+                                                    controllerTargetDevices.forEach { device ->
+                                                        onSetAutoReadyDelay(device.id, seconds)
+                                                    }
                                                 },
                                             )
                                         }
@@ -362,18 +353,12 @@ internal fun MonitoringSummaryCard(
                                             onClick = {
                                                 globalAutoReadyDelaySeconds = null
                                                 globalAutoReadyMenuExpanded = false
+                                                controllerTargetDevices.forEach { device ->
+                                                    onSetAutoReadyDelay(device.id, null)
+                                                }
                                             },
                                         )
                                     }
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        controllerTargetDevices.forEach { device ->
-                                            onSetAutoReadyDelay(device.id, globalAutoReadyDelaySeconds)
-                                        }
-                                    },
-                                ) {
-                                    Text("Set All")
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -395,17 +380,11 @@ internal fun MonitoringSummaryCard(
                                         checked = globalWaitTextEnabled,
                                         onCheckedChange = { checked ->
                                             globalWaitTextEnabled = checked
+                                            controllerTargetDevices.forEach { device ->
+                                                onSetWaitTextEnabled(device.id, checked)
+                                            }
                                         },
                                     )
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        controllerTargetDevices.forEach { device ->
-                                            onSetWaitTextEnabled(device.id, globalWaitTextEnabled)
-                                        }
-                                    },
-                                ) {
-                                    Text("Set All")
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -418,7 +397,6 @@ internal fun MonitoringSummaryCard(
                             Spacer(Modifier.height(8.dp))
                             controllerTargetDevices.forEach { device ->
                                 DeviceControlRow(device = device)
-                                val limitInput = controllerLimitInputs[device.id].orEmpty()
                                 val sensitivityValue = controllerSensitivityInputs[device.id] ?: 50f
                                 Text(
                                     text = device.name,
@@ -445,35 +423,47 @@ internal fun MonitoringSummaryCard(
                                 )
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Start,
                                 ) {
                                     OutlinedButton(
                                         onClick = { onResetDeviceTimer(device.id) },
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.fillMaxWidth(),
                                     ) {
                                         Text("Reset")
-                                    }
-                                    OutlinedTextField(
-                                        value = limitInput,
-                                        onValueChange = { controllerLimitInputs[device.id] = it.filter(Char::isDigit) },
-                                        label = { Text("Limit (ms)") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    OutlinedButton(
-                                        onClick = {
-                                            val seconds = limitInput.toLongOrNull()
-                                            if (seconds != null && seconds > 0L) {
-                                                onSetDisplayLimit(device.id, seconds)
-                                            }
-                                        },
-                                    ) {
-                                        Text("Set")
                                     }
                                 }
                             }
                             } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            controllerTargetDevices.forEach { device ->
+                                                onResetDeviceTimer(device.id)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text("Reset All")
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    OutlinedButton(
+                                        onClick = onPlayStartSound,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text("Start")
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -490,17 +480,13 @@ internal fun MonitoringSummaryCard(
                                         )
                                         Switch(
                                             checked = globalGameModeEnabled,
-                                            onCheckedChange = { checked -> globalGameModeEnabled = checked },
+                                            onCheckedChange = { checked ->
+                                                globalGameModeEnabled = checked
+                                                controllerTargetDevices.forEach { device ->
+                                                    onSetGameModeEnabled(device.id, checked)
+                                                }
+                                            },
                                         )
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            controllerTargetDevices.forEach { device ->
-                                                onSetGameModeEnabled(device.id, globalGameModeEnabled)
-                                            }
-                                        },
-                                    ) {
-                                        Text("Set All")
                                     }
                                 }
                                 if (globalGameModeEnabled) {
@@ -521,7 +507,19 @@ internal fun MonitoringSummaryCard(
                                             )
                                             Switch(
                                                 checked = globalGameModeAutoEnabled,
-                                                onCheckedChange = { checked -> globalGameModeAutoEnabled = checked },
+                                                onCheckedChange = { checked ->
+                                                    globalGameModeAutoEnabled = checked
+                                                    val everyRuns = globalGameModeAutoEveryRuns.coerceIn(1, 20)
+                                                    val reductionMillis = globalGameModeAutoReductionMillis.coerceIn(50L, 500L)
+                                                    controllerTargetDevices.forEach { device ->
+                                                        onSetGameModeAutoConfig(
+                                                            device.id,
+                                                            checked,
+                                                            everyRuns,
+                                                            reductionMillis,
+                                                        )
+                                                    }
+                                                },
                                             )
                                         }
                                         if (globalGameModeAutoEnabled) {
@@ -553,21 +551,72 @@ internal fun MonitoringSummaryCard(
                                                             onClick = {
                                                                 globalGameModeAutoEveryRuns = runs
                                                                 globalGameModeAutoEveryRunsMenuExpanded = false
+                                                                val reductionMillis =
+                                                                    globalGameModeAutoReductionMillis.coerceIn(50L, 500L)
+                                                                controllerTargetDevices.forEach { device ->
+                                                                    onSetGameModeAutoConfig(
+                                                                        device.id,
+                                                                        globalGameModeAutoEnabled,
+                                                                        runs,
+                                                                        reductionMillis,
+                                                                    )
+                                                                }
                                                             },
                                                         )
                                                     }
                                                 }
                                             }
                                         }
-                                        OutlinedButton(
-                                            onClick = {
-                                                val everyRuns = globalGameModeAutoEveryRuns.coerceIn(1, 20)
-                                                controllerTargetDevices.forEach { device ->
-                                                    onSetGameModeAutoConfig(device.id, globalGameModeAutoEnabled, everyRuns)
-                                                }
-                                            },
+                                    }
+                                    if (globalGameModeAutoEnabled) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            Text("Set All")
+                                            ExposedDropdownMenuBox(
+                                                expanded = globalGameModeAutoReductionMenuExpanded,
+                                                onExpandedChange = { globalGameModeAutoReductionMenuExpanded = it },
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = globalGameModeAutoReductionMillis.toString(),
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text("Reduction (ms)") },
+                                                    singleLine = true,
+                                                    trailingIcon = {
+                                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                                            expanded = globalGameModeAutoReductionMenuExpanded,
+                                                        )
+                                                    },
+                                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                                )
+                                                DropdownMenu(
+                                                    expanded = globalGameModeAutoReductionMenuExpanded,
+                                                    onDismissRequest = { globalGameModeAutoReductionMenuExpanded = false },
+                                                ) {
+                                                    reductionOptions.forEach { reduction ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(reduction.toString()) },
+                                                            onClick = {
+                                                                globalGameModeAutoReductionMillis = reduction
+                                                                globalGameModeAutoReductionMenuExpanded = false
+                                                                val everyRuns = globalGameModeAutoEveryRuns.coerceIn(1, 20)
+                                                                controllerTargetDevices.forEach { device ->
+                                                                    onSetGameModeAutoConfig(
+                                                                        device.id,
+                                                                        globalGameModeAutoEnabled,
+                                                                        everyRuns,
+                                                                        reduction,
+                                                                    )
+                                                                }
+                                                            },
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -578,26 +627,27 @@ internal fun MonitoringSummaryCard(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        text = "Limit ${globalGameModeLimitMillis} ms",
+                                        text = "Limit ${globalGameModeLimitMillis}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         modifier = Modifier.weight(1f),
                                     )
                                     OutlinedButton(onClick = {
-                                        globalGameModeLimitMillis = (globalGameModeLimitMillis - 250L).coerceAtLeast(250L)
+                                        val updated = (globalGameModeLimitMillis - 250L).coerceAtLeast(250L)
+                                        globalGameModeLimitMillis = updated
+                                        controllerTargetDevices.forEach { device ->
+                                            onSetGameModeLimit(device.id, updated)
+                                        }
                                     }) {
                                         Text("-")
                                     }
-                                    OutlinedButton(onClick = { globalGameModeLimitMillis += 250L }) {
+                                    OutlinedButton(onClick = {
+                                        val updated = globalGameModeLimitMillis + 250L
+                                        globalGameModeLimitMillis = updated
+                                        controllerTargetDevices.forEach { device ->
+                                            onSetGameModeLimit(device.id, updated)
+                                        }
+                                    }) {
                                         Text("+")
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            controllerTargetDevices.forEach { device ->
-                                                onSetGameModeLimit(device.id, globalGameModeLimitMillis)
-                                            }
-                                        },
-                                    ) {
-                                        Text("Set All")
                                     }
                                 }
                                 Spacer(Modifier.height(8.dp))
@@ -632,19 +682,13 @@ internal fun MonitoringSummaryCard(
                                                     onClick = {
                                                         globalGameModeLives = lives
                                                         globalGameModeLivesMenuExpanded = false
+                                                        controllerTargetDevices.forEach { device ->
+                                                            onSetGameModeLives(device.id, lives)
+                                                        }
                                                     },
                                                 )
                                             }
                                         }
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            controllerTargetDevices.forEach { device ->
-                                                onSetGameModeLives(device.id, globalGameModeLives)
-                                            }
-                                        },
-                                    ) {
-                                        Text("Set All")
                                     }
                                 }
                                 Spacer(Modifier.height(8.dp))
@@ -659,10 +703,14 @@ internal fun MonitoringSummaryCard(
                                     DeviceControlRow(device = device)
                                     val selectedLives = controllerGameLivesInputs[device.id] ?: 10
                                     val livesExpanded = controllerGameLivesMenusExpanded[device.id] == true
-                                    val autoEnabled = controllerGameAutoEnabledInputs[device.id] == true
+                                    val autoEnabled = controllerGameAutoEnabledInputs[device.id] != false
                                     val autoEveryRuns = (controllerGameAutoEveryRunsInputs[device.id] ?: 10).coerceIn(1, 20)
+                                    val autoReductionMillis =
+                                        (controllerGameAutoReductionInputs[device.id] ?: 100L).coerceIn(50L, 500L)
                                     val autoEveryRunsExpanded =
                                         controllerGameAutoEveryRunsMenusExpanded[device.id] == true
+                                    val autoReductionExpanded =
+                                        controllerGameAutoReductionMenusExpanded[device.id] == true
                                     Text(
                                         text = device.name,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -686,6 +734,12 @@ internal fun MonitoringSummaryCard(
                                                 checked = autoEnabled,
                                                 onCheckedChange = { checked ->
                                                     controllerGameAutoEnabledInputs[device.id] = checked
+                                                    onSetGameModeAutoConfig(
+                                                        device.id,
+                                                        checked,
+                                                        autoEveryRuns,
+                                                        autoReductionMillis,
+                                                    )
                                                 },
                                             )
                                         }
@@ -722,18 +776,69 @@ internal fun MonitoringSummaryCard(
                                                             onClick = {
                                                                 controllerGameAutoEveryRunsInputs[device.id] = runs
                                                                 controllerGameAutoEveryRunsMenusExpanded[device.id] = false
+                                                                onSetGameModeAutoConfig(
+                                                                    device.id,
+                                                                    autoEnabled,
+                                                                    runs,
+                                                                    autoReductionMillis,
+                                                                )
                                                             },
                                                         )
                                                     }
                                                 }
                                             }
                                         }
-                                        OutlinedButton(
-                                            onClick = {
-                                                onSetGameModeAutoConfig(device.id, autoEnabled, autoEveryRuns)
-                                            },
+                                    }
+                                    if (autoEnabled) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            Text("Set")
+                                            ExposedDropdownMenuBox(
+                                                expanded = autoReductionExpanded,
+                                                onExpandedChange = { next ->
+                                                    controllerGameAutoReductionMenusExpanded[device.id] = next
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = autoReductionMillis.toString(),
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text("Reduction (ms)") },
+                                                    singleLine = true,
+                                                    trailingIcon = {
+                                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                                            expanded = autoReductionExpanded,
+                                                        )
+                                                    },
+                                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                                )
+                                                DropdownMenu(
+                                                    expanded = autoReductionExpanded,
+                                                    onDismissRequest = {
+                                                        controllerGameAutoReductionMenusExpanded[device.id] = false
+                                                    },
+                                                ) {
+                                                    reductionOptions.forEach { reduction ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(reduction.toString()) },
+                                                            onClick = {
+                                                                controllerGameAutoReductionInputs[device.id] = reduction
+                                                                controllerGameAutoReductionMenusExpanded[device.id] = false
+                                                                onSetGameModeAutoConfig(
+                                                                    device.id,
+                                                                    autoEnabled,
+                                                                    autoEveryRuns,
+                                                                    reduction,
+                                                                )
+                                                            },
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                     Spacer(Modifier.height(8.dp))
@@ -770,13 +875,11 @@ internal fun MonitoringSummaryCard(
                                                         onClick = {
                                                             controllerGameLivesInputs[device.id] = lives
                                                             controllerGameLivesMenusExpanded[device.id] = false
+                                                            onSetGameModeLives(device.id, lives)
                                                         },
                                                     )
                                                 }
                                             }
-                                        }
-                                        OutlinedButton(onClick = { onSetGameModeLives(device.id, selectedLives) }) {
-                                            Text("Set")
                                         }
                                     }
                                 }
@@ -794,6 +897,8 @@ internal fun MonitoringSummaryCard(
                         PreviewSurface(
                             previewViewFactory = previewViewFactory,
                             roiCenterX = roiCenterX,
+                            roiCenterY = roiCenterY,
+                            roiHeight = roiHeight,
                         )
                         MonitoringPreviewInfoPanel(
                             isHost = isHost,
@@ -849,6 +954,8 @@ internal fun MonitoringSummaryCard(
                             PreviewSurface(
                                 previewViewFactory = previewViewFactory,
                                 roiCenterX = roiCenterX,
+                                roiCenterY = roiCenterY,
+                                roiHeight = roiHeight,
                             )
                         }
                     }
@@ -863,7 +970,6 @@ internal fun MonitoringSummaryCard(
 
 private data class ControllerTargetsUiState(
     val controllerTabIndex: Int,
-    val globalLimitInput: String,
     val globalAutoReadyDelaySeconds: Int?,
     val globalWaitTextEnabled: Boolean,
     val globalGameModeEnabled: Boolean,
@@ -1056,7 +1162,12 @@ internal fun WifiWarningCard(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun PreviewSurface(previewViewFactory: SensorNativePreviewViewFactory, roiCenterX: Double) {
+internal fun PreviewSurface(
+    previewViewFactory: SensorNativePreviewViewFactory,
+    roiCenterX: Double,
+    roiCenterY: Double,
+    roiHeight: Double,
+) {
     Box(
         modifier = Modifier
             .width(180.dp)
@@ -1075,13 +1186,16 @@ internal fun PreviewSurface(previewViewFactory: SensorNativePreviewViewFactory, 
             },
         )
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val normalized = roiCenterX.coerceIn(0.0, 1.0).toFloat()
-            val x = size.width * normalized
-            drawLine(
+            val centerX = size.width * roiCenterX.coerceIn(0.0, 1.0).toFloat()
+            val centerY = size.height * roiCenterY.coerceIn(0.0, 1.0).toFloat()
+            val side = (roiHeight.coerceIn(0.0, 1.0).toFloat() * minOf(size.width, size.height)).coerceAtLeast(1f)
+            val topLeftX = (centerX - (side / 2f)).coerceIn(0f, size.width - side)
+            val topLeftY = (centerY - (side / 2f)).coerceIn(0f, size.height - side)
+            drawRect(
                 color = Color(0xFF005A8D),
-                start = androidx.compose.ui.geometry.Offset(x, 0f),
-                end = androidx.compose.ui.geometry.Offset(x, size.height),
-                strokeWidth = 3.dp.toPx(),
+                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                size = androidx.compose.ui.geometry.Size(side, side),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
             )
         }
     }
@@ -1093,6 +1207,8 @@ internal fun AdvancedDetectionCard(
     onUpdateThreshold: (Double) -> Unit,
     onUpdateRoiCenter: (Double) -> Unit,
     onUpdateRoiWidth: (Double) -> Unit,
+    onUpdateRoiCenterY: (Double) -> Unit,
+    onUpdateRoiHeight: (Double) -> Unit,
     onUpdateCooldown: (Int) -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -1128,6 +1244,20 @@ internal fun AdvancedDetectionCard(
                 Slider(
                     value = uiState.roiWidth.toFloat(),
                     onValueChange = { onUpdateRoiWidth(it.toDouble()) },
+                    valueRange = 0.01f..0.40f,
+                )
+
+                MetricDisplay(label = "ROI center Y", value = String.format("%.2f", uiState.roiCenterY))
+                Slider(
+                    value = uiState.roiCenterY.toFloat(),
+                    onValueChange = { onUpdateRoiCenterY(it.toDouble()) },
+                    valueRange = 0.20f..0.80f,
+                )
+
+                MetricDisplay(label = "ROI height", value = String.format("%.2f", uiState.roiHeight))
+                Slider(
+                    value = uiState.roiHeight.toFloat(),
+                    onValueChange = { onUpdateRoiHeight(it.toDouble()) },
                     valueRange = 0.01f..0.40f,
                 )
 

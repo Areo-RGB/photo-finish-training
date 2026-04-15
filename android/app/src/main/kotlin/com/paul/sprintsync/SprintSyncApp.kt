@@ -1,6 +1,5 @@
 package com.paul.sprintsync
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,14 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.paul.sprintsync.core.ui.components.SecondaryButton
 import com.paul.sprintsync.feature.motion.data.nativebridge.SensorNativePreviewViewFactory
 import com.paul.sprintsync.feature.race.domain.SessionCameraFacing
 import com.paul.sprintsync.feature.race.domain.SessionDeviceRole
 import com.paul.sprintsync.feature.race.domain.SessionOperatingMode
 import com.paul.sprintsync.feature.race.domain.SessionStage
-import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun SprintSyncApp(
@@ -133,15 +129,6 @@ fun SprintSyncApp(
                 }
             }
 
-            if (uiState.wifiWarningText != null && !isDisplayHostMode) {
-                item {
-                    WifiWarningCard(
-                        text = uiState.wifiWarningText,
-                        onClick = { onAction(MainAction.OpenWifiSettings) },
-                    )
-                }
-            }
-
             when (uiState.stage) {
                 SessionStage.SETUP -> {
                     if (shouldShowSetupPermissionWarning(uiState.permissionGranted, uiState.deniedPermissions)) {
@@ -221,6 +208,8 @@ fun SprintSyncApp(
                                 onShowPreviewChanged = { showPreview = it },
                                 previewViewFactory = previewViewFactory,
                                 roiCenterX = uiState.roiCenterX,
+                                roiCenterY = uiState.roiCenterY,
+                                roiHeight = uiState.roiHeight,
                                 operatingMode = uiState.operatingMode,
                                 setupActionProfile = setupActionProfile,
                                 devices = uiState.devices,
@@ -257,9 +246,17 @@ fun SprintSyncApp(
                                 onSetGameModeLives = { endpointId, lives ->
                                     onAction(MainAction.SetGameModeLives(endpointId, lives))
                                 },
-                                onSetGameModeAutoConfig = { endpointId, enabled, everyRuns ->
-                                    onAction(MainAction.SetGameModeAutoConfig(endpointId, enabled, everyRuns))
+                                onSetGameModeAutoConfig = { endpointId, enabled, everyRuns, reductionMillis ->
+                                    onAction(
+                                        MainAction.SetGameModeAutoConfig(
+                                            endpointId = endpointId,
+                                            enabled = enabled,
+                                            everyRuns = everyRuns,
+                                            reductionMillis = reductionMillis,
+                                        ),
+                                    )
                                 },
+                                onPlayStartSound = { onAction(MainAction.PlayStartSound) },
                                 onResetRun = { onAction(MainAction.ResetRun) },
                             )
                         }
@@ -270,6 +267,8 @@ fun SprintSyncApp(
                                     onUpdateThreshold = { onAction(MainAction.UpdateThreshold(it)) },
                                     onUpdateRoiCenter = { onAction(MainAction.UpdateRoiCenter(it)) },
                                     onUpdateRoiWidth = { onAction(MainAction.UpdateRoiWidth(it)) },
+                                    onUpdateRoiCenterY = { onAction(MainAction.UpdateRoiCenterY(it)) },
+                                    onUpdateRoiHeight = { onAction(MainAction.UpdateRoiHeight(it)) },
                                     onUpdateCooldown = { onAction(MainAction.UpdateCooldown(it)) },
                                 )
                             }
@@ -295,26 +294,6 @@ fun SprintSyncApp(
                     EventsCard(uiState.recentEvents)
                 }
             }
-            }
-
-            if (isDisplayHostMode) {
-                OutlinedButton(
-                    onClick = { onAction(MainAction.StopMonitoring) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 20.dp, end = 20.dp),
-                    border = BorderStroke(2.5.dp, Color.Black),
-                    shape = RoundedCornerShape(50.dp),
-                ) {
-                    Text(
-                        text = "STOP",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
-                        ),
-                        color = Color.Black,
-                    )
-                }
             }
         }
     }

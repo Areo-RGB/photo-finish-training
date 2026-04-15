@@ -257,6 +257,31 @@ class RaceSessionModelsTest {
             }
         """.trimIndent()
         assertNull(SessionControlCommandMessage.tryParse(invalidAutoRuns))
+
+        val missingReduction = """
+            {
+              "type": "control_command",
+              "action": "set_game_mode_auto_config",
+              "targetEndpointId": "ep-1",
+              "senderDeviceName": "Controller",
+              "gameModeAutoEnabled": true,
+              "gameModeAutoEveryRuns": 10
+            }
+        """.trimIndent()
+        assertNull(SessionControlCommandMessage.tryParse(missingReduction))
+
+        val invalidReduction = """
+            {
+              "type": "control_command",
+              "action": "set_game_mode_auto_config",
+              "targetEndpointId": "ep-1",
+              "senderDeviceName": "Controller",
+              "gameModeAutoEnabled": true,
+              "gameModeAutoEveryRuns": 10,
+              "gameModeAutoReductionMillis": 525
+            }
+        """.trimIndent()
+        assertNull(SessionControlCommandMessage.tryParse(invalidReduction))
     }
 
     @Test
@@ -269,6 +294,7 @@ class RaceSessionModelsTest {
             sensitivityPercent = null,
             gameModeAutoEnabled = true,
             gameModeAutoEveryRuns = 10,
+            gameModeAutoReductionMillis = 150L,
         ).toJsonString()
 
         val parsed = SessionControlCommandMessage.tryParse(raw)
@@ -277,6 +303,7 @@ class RaceSessionModelsTest {
         assertEquals(SessionControlAction.SET_GAME_MODE_AUTO_CONFIG, parsed.action)
         assertEquals(true, parsed.gameModeAutoEnabled)
         assertEquals(10, parsed.gameModeAutoEveryRuns)
+        assertEquals(150L, parsed.gameModeAutoReductionMillis)
     }
 
     @Test
