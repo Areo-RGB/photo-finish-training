@@ -48,7 +48,7 @@ fun SprintSyncApp(
         com.paul.sprintsync.core.RuntimeDeviceConfig(),
     onAction: (MainAction) -> Unit,
 ) {
-    var showPreview by rememberSaveable { mutableStateOf(true) }
+    var showPreview by rememberSaveable { mutableStateOf(DEFAULT_MONITORING_PREVIEW_VISIBLE) }
     var showDebugInfo by rememberSaveable { mutableStateOf(false) }
     val effectiveShowPreview = showPreview
     val localDevice = uiState.devices.firstOrNull { it.isLocal }

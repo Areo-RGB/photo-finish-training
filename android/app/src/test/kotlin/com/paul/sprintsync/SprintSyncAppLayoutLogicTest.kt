@@ -154,6 +154,11 @@ class SprintSyncAppLayoutLogicTest {
     }
 
     @Test
+    fun `monitoring preview defaults off`() {
+        assertFalse(DEFAULT_MONITORING_PREVIEW_VISIBLE)
+    }
+
+    @Test
     fun `inline monitoring reset button shows for compact and wide monitoring modes`() {
         assertFalse(shouldShowInlineMonitoringResetButton(SessionOperatingMode.SINGLE_DEVICE))
         assertTrue(shouldShowInlineMonitoringResetButton(SessionOperatingMode.DISPLAY_HOST))

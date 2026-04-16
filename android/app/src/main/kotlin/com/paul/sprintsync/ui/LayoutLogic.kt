@@ -13,6 +13,7 @@ internal fun shouldShowSetupPermissionWarning(permissionGranted: Boolean, denied
     !permissionGranted && deniedPermissions.isNotEmpty()
 
 internal fun shouldShowUpdateDownloadingOverlay(updateDownloading: Boolean): Boolean = updateDownloading
+internal const val DEFAULT_MONITORING_PREVIEW_VISIBLE: Boolean = false
 
 internal fun formatAppVersionLabel(versionName: String, versionCode: Int): String =
     "v$versionName ($versionCode)"
