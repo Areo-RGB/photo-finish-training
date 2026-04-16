@@ -48,3 +48,4 @@ app.*.map.json
 .dual-graph-context/
 .dual-graph/
 android/mcp.json
+/android/app/src/main/kotlin/com/paul/sprintsync/graphify-out
