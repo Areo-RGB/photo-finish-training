@@ -2,8 +2,8 @@
   "name": "sprint-sync-tools",
   "private": true,
   "scripts": {
-    "build:debug:apk": "cd android && gradlew.bat :app:assembleDebug",
-    "build:release:apk": "cd android && gradlew.bat :app:assembleRelease",
+    "build:debug:apk": "gradlew.bat :app:assembleDebug",
+    "build:release:apk": "gradlew.bat :app:assembleRelease",
 
 
     "install:debug:devices": "node scripts/install-debug-device-flavors-adb-install-only.mjs",

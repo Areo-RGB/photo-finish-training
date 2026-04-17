@@ -24,7 +24,7 @@ function fail(message, detail = '') {
 const appId = 'training.variant';
 const legacyPackagePrefix = 'training.variant.';
 const apkCandidates = [
-  resolve(process.cwd(), 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+  resolve(process.cwd(), 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
   // Legacy fallback for older custom Gradle layout.
   resolve(process.cwd(), 'build', 'app', 'outputs', 'apk', 'debug', 'app-debug.apk'),
 ];

@@ -1,0 +1,38 @@
+# Media files
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+**/*.gif
+**/*.mp4
+**/*.mp3
+**/*.wav
+**/*.ttf
+
+# Agent and Meta directories
+.claude/
+.copilot/
+.github/
+.serena/
+.idea/
+.gradle/
+.kotlin/
+build/
+graphify-out/
+
+# Coding instructions and tool configs
+.editorconfig
+.gitignore
+.codex
+android.code-workspace
+*.iml
+*.run.xml
+
+# Project-specific documentation/instructions
+CODEX.md
+**/CODEX.md
+
+# Logs and temporary files
+*.log
+*.txt
+tmp_oneplus_installed_base.apk
