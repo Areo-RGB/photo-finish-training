@@ -8991,8 +8991,8 @@
       "source_file": "scripts\\install-debug-apk.mjs",
       "source_location": "L17",
       "weight": 1.0,
-      "_src": "install_debug_apk_fail",
-      "_tgt": "sensornativeevents_error",
+      "_src": "sensornativeevents_error",
+      "_tgt": "install_debug_apk_fail",
       "source": "sensornativeevents_error",
       "target": "install_debug_apk_fail"
     },
@@ -9003,8 +9003,8 @@
       "source_file": "scripts\\install-debug-device-flavors-adb-install-only.mjs",
       "source_location": "L17",
       "weight": 1.0,
-      "_src": "install_debug_device_flavors_adb_install_only_fail",
-      "_tgt": "sensornativeevents_error",
+      "_src": "sensornativeevents_error",
+      "_tgt": "install_debug_device_flavors_adb_install_only_fail",
       "source": "sensornativeevents_error",
       "target": "install_debug_device_flavors_adb_install_only_fail"
     },
@@ -9015,8 +9015,8 @@
       "source_file": "scripts\\install-debug-device-flavors-adb.mjs",
       "source_location": "L17",
       "weight": 1.0,
-      "_src": "install_debug_device_flavors_adb_fail",
-      "_tgt": "sensornativeevents_error",
+      "_src": "sensornativeevents_error",
+      "_tgt": "install_debug_device_flavors_adb_fail",
       "source": "sensornativeevents_error",
       "target": "install_debug_device_flavors_adb_fail"
     },
@@ -9027,8 +9027,8 @@
       "source_file": "scripts\\install-release-apk.mjs",
       "source_location": "L17",
       "weight": 1.0,
-      "_src": "install_release_apk_fail",
-      "_tgt": "sensornativeevents_error",
+      "_src": "sensornativeevents_error",
+      "_tgt": "install_release_apk_fail",
       "source": "sensornativeevents_error",
       "target": "install_release_apk_fail"
     },

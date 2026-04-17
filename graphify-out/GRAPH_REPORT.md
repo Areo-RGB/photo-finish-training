@@ -1,7 +1,8 @@
 # Graph Report - .  (2026-04-17)
 
 ## Corpus Check
-- Corpus is ~32,761 words - fits in a single context window. You may not need a graph.
+- 62 files · ~32,761 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
 - 659 nodes · 619 edges · 60 communities detected
@@ -83,14 +84,14 @@
 10. `SensorNativeCameraSession` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `fail()` --calls--> `Error`  [INFERRED]
-  scripts\install-debug-apk.mjs → app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt
-- `fail()` --calls--> `Error`  [INFERRED]
-  scripts\install-debug-device-flavors-adb-install-only.mjs → app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt
-- `fail()` --calls--> `Error`  [INFERRED]
-  scripts\install-debug-device-flavors-adb.mjs → app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt
-- `fail()` --calls--> `Error`  [INFERRED]
-  scripts\install-release-apk.mjs → app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt
+- `Error` --calls--> `fail()`  [INFERRED]
+  app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt → scripts\install-debug-apk.mjs
+- `Error` --calls--> `fail()`  [INFERRED]
+  app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt → scripts\install-debug-device-flavors-adb-install-only.mjs
+- `Error` --calls--> `fail()`  [INFERRED]
+  app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt → scripts\install-debug-device-flavors-adb.mjs
+- `Error` --calls--> `fail()`  [INFERRED]
+  app\src\main\kotlin\com\paul\sprintsync\feature\motion\data\nativebridge\SensorNativeEvents.kt → scripts\install-release-apk.mjs
 
 ## Communities
 
@@ -357,3 +358,21 @@ Nodes (0):
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 59`** (1 nodes): `Type.kt`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+
+## Suggested Questions
+_Questions this graph is uniquely positioned to answer:_
+
+- **Why does `MainActivity` connect `Community 0` to `Community 5`?**
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **What connects `MainAction`, `RequestPermissions`, `StartSingleDevice` to the rest of the system?**
+  _79 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
+  _Cohesion score 0.04 - nodes in this community are weakly interconnected._
+- **Should `Community 1` be split into smaller, more focused modules?**
+  _Cohesion score 0.04 - nodes in this community are weakly interconnected._
+- **Should `Community 2` be split into smaller, more focused modules?**
+  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+- **Should `Community 3` be split into smaller, more focused modules?**
+  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+- **Should `Community 4` be split into smaller, more focused modules?**
+  _Cohesion score 0.07 - nodes in this community are weakly interconnected._
